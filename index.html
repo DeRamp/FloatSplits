@@ -1,0 +1,1339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splits — Onewheel Race Log Comparison</title>
+<style>
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#222220; --surface-3:#2c2c2a;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --accent:#3987e5; --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+    /* run series colors (dark categorical, distinct hues) */
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#d55181;
+    --s5:#c98500; --s6:#9085e9; --s7:#e66767; --s8:#008300;
+    --mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--page);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;
+    display:flex;flex-direction:column;overflow:hidden}
+  h1,h2,h3{margin:0;font-weight:600}
+  button,select,input{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
+    border:1px solid var(--border);border-radius:7px;padding:6px 10px;cursor:pointer}
+  button:hover,select:hover{background:var(--surface-3)}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.1)}
+  button.danger{color:var(--crit)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  input[type=number],input[type=text]{cursor:text}
+  label.field{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);font-size:12px}
+  .tag{font-size:11px;color:var(--muted)}
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);
+    border-bottom:1px solid var(--border);flex-wrap:wrap}
+  header .brand{display:flex;flex-direction:column;margin-right:8px}
+  header .brand b{font-size:15px;letter-spacing:.3px}
+  header .brand span{font-size:11px;color:var(--muted)}
+  header .spacer{flex:1}
+  .toolgroup{display:flex;align-items:center;gap:6px}
+  main{flex:1;display:grid;grid-template-columns:minmax(340px,44%) 1fr;min-height:0}
+  @media (max-width:860px){main{grid-template-columns:1fr;overflow:auto}}
+  .left{border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+  .right{display:flex;flex-direction:column;min-height:0}
+  .panel-h{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);
+    background:var(--surface);font-size:12px;color:var(--ink-2);flex-wrap:wrap}
+  .panel-h h2{font-size:13px;color:var(--ink)}
+  #mapWrap{position:relative;flex:1;min-height:260px;background:#111}
+  #map{width:100%;height:100%;display:block;cursor:crosshair}
+  #mapLegend{position:absolute;right:10px;bottom:10px;background:rgba(20,20,19,.82);border:1px solid var(--border);
+    border-radius:8px;padding:8px 10px;font-size:11px;max-width:180px}
+  #mapHint{position:absolute;left:10px;top:10px;background:rgba(20,20,19,.82);border:1px solid var(--border);
+    border-radius:8px;padding:6px 10px;font-size:12px;color:var(--ink-2);max-width:60%}
+  .gate-editor{border-top:1px solid var(--border);max-height:38%;overflow:auto;background:var(--surface)}
+  .gate-editor .row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border)}
+  .gate-editor .row input[type=text]{flex:1;min-width:60px}
+  .gate-dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .tabs{display:flex;gap:2px;padding:6px 10px 0;background:var(--surface);border-bottom:1px solid var(--border);
+    overflow-x:auto}
+  .tabs button{border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:transparent;
+    color:var(--muted);padding:7px 12px;white-space:nowrap}
+  .tabs button.active{background:var(--surface-2);color:var(--ink);border-color:var(--border)}
+  .views{flex:1;overflow:auto;min-height:0}
+  .view{display:none;padding:14px}
+  .view.active{display:block}
+  .empty{color:var(--muted);text-align:center;padding:48px 20px;font-size:13px}
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 9px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--ink-2);font-weight:600;position:sticky;top:0;background:var(--surface);z-index:1}
+  tr.total td{border-top:2px solid var(--axis);font-weight:700}
+  td.best{color:var(--good);font-weight:700}
+  td.na{color:var(--muted)}
+  .delta{font-size:11px;color:var(--muted)}
+  .seg-block{margin-bottom:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .seg-title{display:flex;align-items:center;gap:8px;padding:8px 12px;font-weight:600;font-size:13px;background:var(--surface-3)}
+  .seg-title .win{font-size:11px;color:var(--muted);font-weight:400}
+  .seg-block table th{position:static;background:transparent;font-size:11px;color:var(--muted)}
+  .seg-block td,.seg-block th{padding:5px 10px}
+  td.rank{color:var(--muted);text-align:center;width:26px}
+  .runs-mgr{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .run-row{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px 8px}
+  .run-row.off{opacity:.5}
+  .run-row input[type=color]{width:22px;height:22px;padding:0;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer}
+  .run-row .run-nm{font-size:13px}
+  .run-row .run-remove{padding:2px 7px;line-height:1}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+  .card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .card .name{display:flex;align-items:center;gap:7px;font-weight:600;margin-bottom:8px}
+  .card .kv{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;color:var(--ink-2)}
+  .card .kv b{color:var(--ink);font-weight:600}
+  .swatch{width:11px;height:11px;border-radius:3px;flex:none}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12px}
+  .legend .item{display:flex;align-items:center;gap:6px;color:var(--ink-2)}
+  .chart-block{margin-bottom:22px}
+  .chart-block h3{font-size:13px;margin-bottom:2px}
+  .chart-block p.sub{margin:0 0 8px;font-size:11px;color:var(--muted)}
+  canvas.chart{width:100%;display:block;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+  .controls-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .falls-list{font-size:12px}
+  .falls-list .f{display:grid;grid-template-columns:auto auto auto 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--grid);color:var(--ink-2)}
+  .pill{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;background:var(--surface-3);color:var(--ink-2)}
+  dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:14px;padding:0;max-width:440px;width:92%}
+  dialog::backdrop{background:rgba(0,0,0,.55)}
+  dialog .dlg-h{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600}
+  dialog .dlg-b{padding:16px;display:flex;flex-direction:column;gap:12px}
+  dialog .dlg-f{padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+  .statebox{display:flex;flex-wrap:wrap;gap:6px}
+  .statebox label{display:flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:6px;padding:3px 7px;font-size:12px;cursor:pointer}
+  #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--surface-3);
+    border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;opacity:0;
+    transition:opacity .25s;pointer-events:none;z-index:50;max-width:80%}
+  #toast.show{opacity:1}
+  .hidden{display:none!important}
+  .foot{padding:5px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);background:var(--surface);
+    display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>◔ Splits</b><span>Onewheel race log comparison</span></div>
+  <div class="toolgroup">
+    <label class="field">Track
+      <select id="trackSel" title="Select a saved track"><option value="">— none —</option></select>
+    </label>
+    <button id="newTrackBtn" title="Create a track by placing gates on a run">＋ New track</button>
+    <button id="editTrackBtn" class="hidden" title="Edit gates of the selected track">✎ Edit</button>
+    <button id="delTrackBtn" class="danger hidden" title="Delete selected track">🗑</button>
+  </div>
+  <div class="toolgroup">
+    <button id="importBtn" class="primary">⤒ Import runs</button>
+    <input id="fileInput" type="file" accept=".json,application/json" multiple class="hidden">
+  </div>
+  <div class="spacer"></div>
+  <div class="toolgroup">
+    <label class="field">Reference
+      <select id="refSel" title="Reference run for delta & map coloring"></select>
+    </label>
+    <label class="field">Color by
+      <select id="channelSel" title="Channel used to color the map">
+        <option value="spd">Board speed</option>
+        <option value="gpsSpd">GPS speed</option>
+        <option value="duty">Duty cycle</option>
+        <option value="delta">Δ time vs ref</option>
+      </select>
+    </label>
+    <label class="field">Units
+      <select id="unitSel"><option value="kmh">km/h</option><option value="mph">mph</option></select>
+    </label>
+    <button id="settingsBtn" title="Settings">⚙</button>
+  </div>
+</header>
+
+<main>
+  <section class="left">
+    <div class="panel-h">
+      <h2>Course map</h2>
+      <span id="mapMode" class="tag"></span>
+      <div class="spacer" style="flex:1"></div>
+      <span class="tag" style="margin-right:2px">scroll = zoom · drag = pan</span>
+      <button id="fitViewBtn" title="Reset zoom &amp; pan to fit">⤢ Fit</button>
+      <button id="saveTrackBtn" class="primary hidden">Save track…</button>
+      <button id="cancelSetupBtn" class="hidden">Cancel</button>
+    </div>
+    <div id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="mapHint" class="hidden"></div>
+      <div id="mapLegend" class="hidden"></div>
+    </div>
+    <div id="gateEditor" class="gate-editor hidden"></div>
+  </section>
+
+  <section class="right">
+    <div class="tabs" id="tabs">
+      <button data-view="splits" class="active">Splits &amp; summary</button>
+      <button data-view="delta">Δ time</button>
+      <button data-view="channels">Channels</button>
+      <button data-view="dist">Distributions</button>
+      <button data-view="power">Battery &amp; thermal</button>
+      <button data-view="falls">Offs</button>
+    </div>
+    <div class="views" id="views">
+      <div class="view active" id="view-splits"></div>
+      <div class="view" id="view-delta"></div>
+      <div class="view" id="view-channels"></div>
+      <div class="view" id="view-dist"></div>
+      <div class="view" id="view-power"></div>
+      <div class="view" id="view-falls"></div>
+    </div>
+  </section>
+</main>
+<div class="foot">
+  <span id="footRuns">No runs loaded</span>
+  <span id="footTrack"></span>
+  <span class="spacer" style="flex:1"></span>
+  <span>Offline · data stays in your browser (IndexedDB)</span>
+</div>
+
+<!-- Settings dialog -->
+<dialog id="settingsDlg">
+  <div class="dlg-h">Settings</div>
+  <div class="dlg-b">
+    <div>
+      <div style="margin-bottom:6px">Stats to compare <span class="tag">(shown as graphs in the Channels tab)</span></div>
+      <div class="statebox" id="compareChannels"></div>
+    </div>
+    <div>
+      <div style="margin-bottom:6px">Riding states <span class="tag">(an off = leaving this set; recovery = time until it returns)</span></div>
+      <div class="statebox" id="ridingStates"></div>
+    </div>
+    <label class="field">Temperature unit
+      <select id="tempUnitSel"><option value="c">Celsius (°C)</option><option value="f">Fahrenheit (°F)</option></select>
+    </label>
+    <label class="field">Default gate width (m)
+      <input type="number" id="gateWidthInp" min="4" max="200" step="1" value="25" style="width:80px">
+    </label>
+    <label class="field">Ignore offs slower than (km/h at onset)
+      <input type="number" id="fallSpdInp" min="0" max="60" step="1" value="0" style="width:80px">
+      <span class="tag">0 = show all offs</span>
+    </label>
+  </div>
+  <div class="dlg-f"><button id="settingsClose" class="primary">Done</button></div>
+</dialog>
+
+<!-- Save-track dialog -->
+<dialog id="saveDlg">
+  <div class="dlg-h">Save track</div>
+  <div class="dlg-b">
+    <label class="field" style="flex-direction:column;align-items:stretch">Track name
+      <input type="text" id="trackNameInp" placeholder="e.g. Alton Baker loop" style="margin-top:5px">
+    </label>
+    <div class="tag" id="saveSummary"></div>
+  </div>
+  <div class="dlg-f">
+    <button id="saveCancel">Cancel</button>
+    <button id="saveConfirm" class="primary">Save</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Splits — single-file Onewheel race log comparison tool.
+   Sections: (1) geo/core math, (2) parsing, (3) crossing detection, (4) metrics,
+   (5) IndexedDB, (6) app state, (7) map render + interaction, (8) charts,
+   (9) views, (10) wiring.
+   ============================================================================ */
+
+/* ---------- (1) geo / core math ------------------------------------------ */
+const R_EARTH = 6371000, D2R = Math.PI/180;
+function haversine(la1,lo1,la2,lo2){
+  const dla=(la2-la1)*D2R, dlo=(lo2-lo1)*D2R;
+  const a=Math.sin(dla/2)**2 + Math.cos(la1*D2R)*Math.cos(la2*D2R)*Math.sin(dlo/2)**2;
+  return 2*R_EARTH*Math.asin(Math.sqrt(a));
+}
+function makeProjector(lat0,lon0){
+  const kx=D2R*R_EARTH*Math.cos(lat0*D2R), ky=D2R*R_EARTH;
+  return (lat,lon)=>({x:(lon-lon0)*kx, y:(lat-lat0)*ky});
+}
+// binary search: largest index i with arr[i].t <= t
+function bsearchTime(arr,t){
+  let lo=0,hi=arr.length-1,ans=0;
+  while(lo<=hi){const m=(lo+hi)>>1; if(arr[m].t<=t){ans=m;lo=m+1;}else hi=m-1;}
+  return ans;
+}
+
+/* ---------- (2) parsing --------------------------------------------------- */
+function parseFloatyLog(json, fallbackId){
+  if(!json || !Array.isArray(json.locations) || !Array.isArray(json.logs))
+    throw new Error("Not a Floaty log (missing locations/logs arrays).");
+  const gps=json.locations.map(p=>({t:p.timestamp,lat:p.latitude,lon:p.longitude,alt:p.altitude,spd:p.speed,acc:p.accuracy}))
+    .filter(p=>isFinite(p.lat)&&isFinite(p.lon)).sort((a,b)=>a.t-b.t);
+  const tel=json.logs.map(p=>({t:p.timestamp,duty:p.dutyCycle,spd:p.speed,state:p.state,switchState:p.switchState,
+    fault:p.faultCode,volts:p.batteryVolts,battPct:p.batteryPercent,current:p.batteryCurrent,motorCurrent:p.motorCurrent,
+    wh:p.wattHours,ah:p.ampHours,motorTemp:p.motorTemp,ctrlTemp:p.controllerTemp,roll:p.rollAngle,pitch:p.pitchAngle,
+    throttle:p.throttle})).sort((a,b)=>a.t-b.t);
+  const cum=new Array(gps.length).fill(0);
+  for(let i=1;i<gps.length;i++) cum[i]=cum[i-1]+haversine(gps[i-1].lat,gps[i-1].lon,gps[i].lat,gps[i].lon);
+  const b={minLat:json.minLatitude,maxLat:json.maxLatitude,minLon:json.minLongitude,maxLon:json.maxLongitude};
+  if(!isFinite(b.minLat)){ // derive if absent
+    b.minLat=Math.min(...gps.map(p=>p.lat)); b.maxLat=Math.max(...gps.map(p=>p.lat));
+    b.minLon=Math.min(...gps.map(p=>p.lon)); b.maxLon=Math.max(...gps.map(p=>p.lon));
+  }
+  return {
+    id: json.id || fallbackId,
+    meta:{id:json.id,boardId:json.boardId,startTime:json.startTime,endTime:json.endTime,
+      distance:json.distance,bounds:b,lat0:(b.minLat+b.maxLat)/2,lon0:(b.minLon+b.maxLon)/2},
+    gps, tel, gpsCumDist:cum
+  };
+}
+// cumulative GPS distance (m) at an arbitrary timestamp
+function gpsDistAtTime(run,t){
+  const g=run.gps; if(!g.length) return 0;
+  if(t<=g[0].t) return run.gpsCumDist[0];
+  if(t>=g[g.length-1].t) return run.gpsCumDist[g.length-1];
+  const i=bsearchTime(g,t), j=Math.min(i+1,g.length-1);
+  if(j===i) return run.gpsCumDist[i];
+  const f=(t-g[i].t)/(g[j].t-g[i].t);
+  return run.gpsCumDist[i]+(run.gpsCumDist[j]-run.gpsCumDist[i])*f;
+}
+function gpsPosAtTime(run,t){
+  const g=run.gps; if(!g.length) return null;
+  if(t<=g[0].t) return {lat:g[0].lat,lon:g[0].lon};
+  if(t>=g[g.length-1].t){const p=g[g.length-1];return {lat:p.lat,lon:p.lon};}
+  const i=bsearchTime(g,t), j=Math.min(i+1,g.length-1);
+  const f=j===i?0:(t-g[i].t)/(g[j].t-g[i].t);
+  return {lat:g[i].lat+(g[j].lat-g[i].lat)*f, lon:g[i].lon+(g[j].lon-g[i].lon)*f};
+}
+
+/* ---------- (3) gates & crossing detection -------------------------------- */
+function headingAtNearest(run, lat, lon){
+  // find nearest gps point, return travel heading (rad) in projected space + that point
+  const project=makeProjector(run.meta.lat0,run.meta.lon0);
+  const c=project(lat,lon); let best=-1,bd=Infinity;
+  for(let i=0;i<run.gps.length;i++){const p=project(run.gps[i].lat,run.gps[i].lon);
+    const d=(p.x-c.x)**2+(p.y-c.y)**2; if(d<bd){bd=d;best=i;}}
+  const i0=Math.max(0,best-1), i1=Math.min(run.gps.length-1,best+1);
+  const a=project(run.gps[i0].lat,run.gps[i0].lon), b=project(run.gps[i1].lat,run.gps[i1].lon);
+  return {idx:best, headingRad:Math.atan2(b.y-a.y,b.x-a.x), lat:run.gps[best].lat, lon:run.gps[best].lon,
+          dist:Math.sqrt(bd)};
+}
+function segIntersectT(p1,p2,q1,q2){
+  const rx=p2.x-p1.x, ry=p2.y-p1.y, sx=q2.x-q1.x, sy=q2.y-q1.y;
+  const den=rx*sy-ry*sx; if(Math.abs(den)<1e-12) return null;
+  const qpx=q1.x-p1.x, qpy=q1.y-p1.y;
+  const t=(qpx*sy-qpy*sx)/den, u=(qpx*ry-qpy*rx)/den;
+  return (t>=0&&t<=1&&u>=0&&u<=1)?t:null;
+}
+// returns array aligned to gates: {t, distAlong, gpsIdx} | null
+function detectCrossings(run, gates, lat0, lon0){
+  const project=makeProjector(lat0,lon0);
+  const proj=run.gps.map(p=>project(p.lat,p.lon));
+  const out=[]; let from=0;
+  for(const gate of gates){
+    const c=project(gate.lat,gate.lon), perp=gate.headingRad+Math.PI/2, hw=gate.widthM/2;
+    const q1={x:c.x+Math.cos(perp)*hw, y:c.y+Math.sin(perp)*hw};
+    const q2={x:c.x-Math.cos(perp)*hw, y:c.y-Math.sin(perp)*hw};
+    const gd={x:Math.cos(gate.headingRad), y:Math.sin(gate.headingRad)};
+    let found=null;
+    for(let i=Math.max(1,from);i<run.gps.length;i++){
+      const p1=proj[i-1], p2=proj[i];
+      const tvx=p2.x-p1.x, tvy=p2.y-p1.y;
+      if(tvx*gd.x+tvy*gd.y<=0) continue;             // must travel in gate's forward direction
+      const t=segIntersectT(p1,p2,q1,q2);
+      if(t!==null){
+        const ts=run.gps[i-1].t+(run.gps[i].t-run.gps[i-1].t)*t;
+        const da=run.gpsCumDist[i-1]+(run.gpsCumDist[i]-run.gpsCumDist[i-1])*t;
+        found={t:ts,distAlong:da,gpsIdx:i}; from=i; break;
+      }
+    }
+    out.push(found);
+  }
+  return out;
+}
+
+/* ---------- (4) metrics --------------------------------------------------- */
+function stat(arr){
+  let mn=Infinity,mx=-Infinity,sum=0,n=0;
+  for(const v of arr){if(v==null||!isFinite(v))continue;if(v<mn)mn=v;if(v>mx)mx=v;sum+=v;n++;}
+  return n?{min:mn,max:mx,avg:sum/n,n}:{min:null,max:null,avg:null,n:0};
+}
+function telWindow(run,tIn,tOut){
+  const a=bsearchTime(run.tel,tIn), b=bsearchTime(run.tel,tOut);
+  const lo=run.tel[a] && run.tel[a].t<tIn ? a+1 : a;
+  return run.tel.slice(lo, b+1);
+}
+function findFalls(samples, ridingSet, minSpd){
+  const falls=[]; if(!samples.length) return falls;
+  let prevRiding=ridingSet.has(samples[0].state);
+  for(let i=1;i<samples.length;i++){
+    const now=ridingSet.has(samples[i].state);
+    if(prevRiding && !now){
+      let rec=null;
+      for(let j=i+1;j<samples.length;j++){if(ridingSet.has(samples[j].state)){rec=samples[j].t;break;}}
+      const spdAt=samples[i-1].spd;
+      if(spdAt>=minSpd) falls.push({t:samples[i].t,state:samples[i].state,spdAt,recoveryMs:rec==null?null:rec-samples[i].t});
+    }
+    prevRiding=now;
+  }
+  return falls;
+}
+function segmentMetrics(run,tIn,tOut,ridingSet,minSpd){
+  const s=telWindow(run,tIn,tOut); if(!s.length) return null;
+  const falls=findFalls(s,ridingSet,minSpd);
+  const gpsIn=gpsDistAtTime(run,tIn), gpsOut=gpsDistAtTime(run,tOut);
+  // elevation gain/loss from gps in window
+  let gain=0,loss=0,prevAlt=null;
+  for(const p of run.gps){ if(p.t<tIn||p.t>tOut) continue; if(prevAlt!=null){const d=p.alt-prevAlt; if(d>0)gain+=d; else loss-=d;} prevAlt=p.alt; }
+  return {
+    dur:tOut-tIn, distM:gpsOut-gpsIn,
+    duty:stat(s.map(x=>x.duty)), spd:stat(s.map(x=>x.spd)),
+    motorTemp:stat(s.map(x=>x.motorTemp)), ctrlTemp:stat(s.map(x=>x.ctrlTemp)),
+    volts:stat(s.map(x=>x.volts)),
+    battPctStart:s[0].battPct, battPctEnd:s[s.length-1].battPct,
+    whStart:s[0].wh, whEnd:s[s.length-1].wh,
+    elevGain:gain, elevLoss:loss,
+    falls, fallCount:falls.length, totalDowntimeMs:falls.reduce((a,f)=>a+(f.recoveryMs||0),0),
+    nSamples:s.length
+  };
+}
+
+/* ---------- (5) IndexedDB ------------------------------------------------- */
+const DB={_db:null};
+DB.open=function(){return new Promise((res,rej)=>{
+  const r=indexedDB.open("splitsDB",1);
+  r.onupgradeneeded=e=>{const db=e.target.result;
+    if(!db.objectStoreNames.contains("tracks")) db.createObjectStore("tracks",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("runs")) db.createObjectStore("runs",{keyPath:"id"});};
+  r.onsuccess=e=>{DB._db=e.target.result;res();}; r.onerror=e=>rej(e.target.error);
+});};
+DB._tx=function(store,mode){return DB._db.transaction(store,mode).objectStore(store);};
+DB.put=function(store,val){return new Promise((res,rej)=>{const r=DB._tx(store,"readwrite").put(val);r.onsuccess=()=>res();r.onerror=e=>rej(e.target.error);});};
+DB.del=function(store,key){return new Promise((res,rej)=>{const r=DB._tx(store,"readwrite").delete(key);r.onsuccess=()=>res();r.onerror=e=>rej(e.target.error);});};
+DB.all=function(store){return new Promise((res,rej)=>{const r=DB._tx(store,"readonly").getAll();r.onsuccess=e=>res(e.target.result||[]);r.onerror=e=>rej(e.target.error);});};
+
+/* ---------- (6) app state ------------------------------------------------- */
+const RUN_COLORS=['--s1','--s2','--s3','--s4','--s5','--s6','--s7','--s8']
+  .map(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const STATE_LABELS={0:"Startup",1:"Riding",2:"Tiltback",3:"Wheelslip",4:"Upside-down",5:"Flywheel",
+  6:"Fault·pitch",7:"Fault·roll",8:"Fault·switch½",9:"Stopped (feet off)",10:"Fault·startup",
+  11:"Fault·reverse",12:"Quickstop",13:"Disabled"};
+const app={
+  runs:[],                 // parsed runs, in import order
+  tracks:[],               // saved track defs
+  currentTrackId:"",
+  refRunId:"",
+  channel:"spd",
+  channels:["gpsSpd","spd","duty","motorTemp","pitch"], // stats shown in the Channels comparison tab
+  units:"kmh",
+  tempUnit:"c",            // "c" | "f" — display unit for temperatures
+  ridingSet:new Set([1,3]),
+  gateWidth:25,
+  fallMinSpd:0,
+  setup:null,              // {refRunId, gates:[]} while creating a track
+  crossings:{},            // runId -> [crossing|null] for current track
+  cursorDist:null,         // linked-cursor distance-from-start (m), or null
+  activeView:"splits",
+};
+function colorFor(runId){const r=app.runs.find(x=>x.id===runId);if(r&&r.color)return r.color;
+  const i=app.runs.findIndex(x=>x.id===runId);return RUN_COLORS[(i<0?0:i)%RUN_COLORS.length];}
+function runName(run){return run.name || ("Run "+(app.runs.indexOf(run)+1));}
+function currentTrack(){return app.tracks.find(t=>t.id===app.currentTrackId)||null;}
+function displayRuns(){return app.runs.filter(r=>r.enabled!==false);}   // enabled runs drive all views
+
+/* speed unit conversion (telemetry speed assumed km/h) */
+function convSpd(kmh){return app.units==="mph"?kmh*0.621371:kmh;}
+function spdUnit(){return app.units==="mph"?"mph":"km/h";}
+function convTemp(c){return app.tempUnit==="f"?c*9/5+32:c;}
+function tempUnit(){return app.tempUnit==="f"?"°F":"°C";}
+function fmtTime(ms){if(ms==null||!isFinite(ms))return "—";const s=ms/1000;const m=Math.floor(s/60);const r=s-m*60;
+  return m>0?`${m}:${r.toFixed(1).padStart(4,'0')}`:`${r.toFixed(1)}s`;}
+function fmtDur(ms){if(ms==null)return"—";const s=Math.round(ms/1000);const m=Math.floor(s/60);return m>0?`${m}m ${s-m*60}s`:`${s}s`;}
+
+/* ---------- toast --------------------------------------------------------- */
+let toastT=null;
+function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),2600);}
+
+/* ---------- (7) map render + interaction ---------------------------------- */
+const mapC=document.getElementById("map");
+let mapTf=null; // {project, sx, ...} for px<->world
+let mapView={k:1,tx:0,ty:0}; // user zoom (k) + pan (px) applied on top of the auto-fit
+function resetMapView(){mapView={k:1,tx:0,ty:0};}
+// Points to draw for a run: full path in setup/no-track; clipped to Start→Finish once a track is picked.
+function runDrawPoints(run){
+  const full=run.gps;
+  if(app.setup)return full;
+  const t=currentTrack(); if(!t)return full;
+  const cr=app.crossings[run.id]; if(!cr)return full;
+  const s=cr[0], f=cr[t.gates.length-1];
+  if(!s||!f)return full;               // run doesn't complete the course → show its full path
+  const sp=gpsPosAtTime(run,s.t), fp=gpsPosAtTime(run,f.t);
+  const inner=run.gps.filter(p=>p.t>s.t&&p.t<f.t);
+  return [{lat:sp.lat,lon:sp.lon,t:s.t},...inner,{lat:fp.lat,lon:fp.lon,t:f.t}];
+}
+function combinedBounds(){
+  let mnLa=Infinity,mxLa=-Infinity,mnLo=Infinity,mxLo=-Infinity;
+  const ext=(la,lo)=>{if(la<mnLa)mnLa=la;if(la>mxLa)mxLa=la;if(lo<mnLo)mnLo=lo;if(lo>mxLo)mxLo=lo;};
+  if(app.setup){
+    const ref=refRunForSetup();
+    if(ref){const b=ref.meta.bounds;ext(b.minLat,b.minLon);ext(b.maxLat,b.maxLon);}
+    for(const g of app.setup.gates)ext(g.lat,g.lon); // keep all gates in view (also covers no-run edits)
+  } else {
+    const clip=!!currentTrack();
+    for(const r of displayRuns()){
+      if(clip){for(const p of runDrawPoints(r))ext(p.lat,p.lon);}
+      else{const b=r.meta.bounds;ext(b.minLat,b.minLon);ext(b.maxLat,b.maxLon);}
+    }
+  }
+  if(!isFinite(mnLa))return null;
+  if(mnLa===mxLa){mnLa-=1e-4;mxLa+=1e-4;} if(mnLo===mxLo){mnLo-=1e-4;mxLo+=1e-4;}
+  return {mnLa,mxLa,mnLo,mxLo};
+}
+function buildMapTransform(w,h){
+  const b=combinedBounds(); if(!b)return null;
+  const lat0=(b.mnLa+b.mxLa)/2, lon0=(b.mnLo+b.mxLo)/2, project=makeProjector(lat0,lon0);
+  const c1=project(b.mnLa,b.mnLo), c2=project(b.mxLa,b.mxLo);
+  const wx=Math.max(1e-6,Math.abs(c2.x-c1.x)), wy=Math.max(1e-6,Math.abs(c2.y-c1.y));
+  const pad=28, fit=Math.min((w-2*pad)/wx,(h-2*pad)/wy);
+  const S=fit*mapView.k;                       // effective scale incl. user zoom
+  const cx=(c1.x+c2.x)/2, cy=(c1.y+c2.y)/2;
+  return {project,lat0,lon0,sx:S,
+    toPx:(lat,lon)=>{const p=project(lat,lon);return {x:w/2+mapView.tx+(p.x-cx)*S, y:h/2+mapView.ty-(p.y-cy)*S};},
+    pxToWorld:(px,py)=>({x:(px-w/2-mapView.tx)/S+cx, y:-(py-h/2-mapView.ty)/S+cy}),
+    worldToLatLon:(x,y)=>({lat:lat0+ y/(D2R*R_EARTH), lon:lon0 + x/(D2R*R_EARTH*Math.cos(lat0*D2R))})
+  };
+}
+// sequential blue ramp (light->dark) for magnitude coloring
+const SEQ=['#cde2fb','#9ec5f4','#6da7ec','#3987e5','#256abf','#184f95','#0d366b'];
+function seqColor(f){f=Math.max(0,Math.min(1,f));const x=f*(SEQ.length-1);const i=Math.floor(x);const g=x-i;
+  return lerpHex(SEQ[i],SEQ[Math.min(i+1,SEQ.length-1)],g);}
+function divColor(f){ // -1..1 : red(behind) .. gray .. blue(ahead)
+  const gray='#5a5a57';
+  if(f>=0) return lerpHex(gray,'#3987e5',Math.min(1,f));
+  return lerpHex(gray,'#d03b3b',Math.min(1,-f));
+}
+function lerpHex(a,b,t){const pa=hx(a),pb=hx(b);
+  return `rgb(${Math.round(pa[0]+(pb[0]-pa[0])*t)},${Math.round(pa[1]+(pb[1]-pa[1])*t)},${Math.round(pa[2]+(pb[2]-pa[2])*t)})`;}
+function hx(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+
+function drawMap(){
+  const wrap=document.getElementById("mapWrap");
+  const dpr=window.devicePixelRatio||1, w=wrap.clientWidth, h=wrap.clientHeight;
+  mapC.width=w*dpr; mapC.height=h*dpr; mapC.style.width=w+"px"; mapC.style.height=h+"px";
+  const ctx=mapC.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const tf=buildMapTransform(w,h); mapTf=tf;
+  if(!tf){ctx.fillStyle="#66655f";ctx.font="13px system-ui";ctx.textAlign="center";
+    ctx.fillText("Import a run to see the course.",w/2,h/2);return;}
+  const runs=app.setup?(refRunForSetup()?[refRunForSetup()]:[]):displayRuns();
+  const colorByChannel=!app.setup && app.channel!=="none";
+  // during setup/edit, draw the other loaded runs faintly for placement context
+  if(app.setup){
+    const refId=refRunForSetup()?refRunForSetup().id:null;
+    ctx.lineWidth=1.5;
+    for(const r of app.runs){ if(r.id===refId)continue;
+      ctx.globalAlpha=0.16; ctx.strokeStyle=colorFor(r.id); ctx.beginPath();
+      r.gps.forEach((p,i)=>{const q=tf.toPx(p.lat,p.lon); i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  for(const run of runs){
+    const col=colorFor(run.id);
+    const pts=runDrawPoints(run);
+    if(colorByChannel && app.channel!=="delta" && CHANNEL_CATALOG[app.channel]){
+      // color path by channel magnitude (range over the drawn portion). Inverted ramp: slow/low = dark, fast/high = light.
+      const id=app.channel; let mn=Infinity,mx=-Infinity;
+      for(const p of pts){const v=sampleChannel(run,p.t,id);if(v<mn)mn=v;if(v>mx)mx=v;}
+      const rng=mx-mn||1;
+      ctx.lineWidth=3;
+      for(let i=1;i<pts.length;i++){
+        const v=sampleChannel(run,pts[i].t,id);
+        ctx.strokeStyle=seqColor(1-(v-mn)/rng);
+        const a=tf.toPx(pts[i-1].lat,pts[i-1].lon), b=tf.toPx(pts[i].lat,pts[i].lon);
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      }
+    } else if(colorByChannel && app.channel==="delta" && app.refRunId){
+      drawDeltaColoredPath(ctx,tf,run,pts);
+    } else {
+      ctx.strokeStyle=col; ctx.lineWidth=app.setup?3:2.2; ctx.globalAlpha=app.setup?1:0.9;
+      ctx.beginPath();
+      pts.forEach((p,i)=>{const q=tf.toPx(p.lat,p.lon); i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
+  }
+  // gates (from setup or current track)
+  const gates=app.setup?app.setup.gates:(currentTrack()?currentTrack().gates:[]);
+  gates.forEach((g,i)=>drawGate(ctx,tf,g,i,gates.length));
+  // fall pins (same set as the Falls tab), colored per run
+  if(!app.setup){
+    for(const run of runs){
+      for(const f of runFalls(run)){
+        const pos=gpsPosAtTime(run,f.t); if(!pos)continue;
+        const q=tf.toPx(pos.lat,pos.lon); drawFallPin(ctx,q.x,q.y,colorFor(run.id));
+      }
+    }
+  }
+  // linked-cursor position dots
+  if(app.cursorDist!=null && !app.setup) drawCursorDots(ctx,tf);
+  updateMapLegend();
+}
+function drawFallPin(ctx,x,y,color){
+  ctx.save();
+  ctx.fillStyle=color; ctx.strokeStyle="rgba(0,0,0,.65)"; ctx.lineWidth=1.3;
+  ctx.beginPath();            // stem: triangle from tip (x,y) up to the head
+  ctx.moveTo(x,y); ctx.lineTo(x-4.5,y-9); ctx.lineTo(x+4.5,y-9); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(x,y-13,6,0,7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y-13,2.2,0,7); ctx.fillStyle="#fff"; ctx.fill();
+  ctx.restore();
+}
+function drawGate(ctx,tf,g,i,n){
+  const c=tf.toPx(g.lat,g.lon);
+  const perp=g.headingRad+Math.PI/2;
+  // gate line length in px = widthM * sx
+  const hw=(g.widthM/2)*tf.sx;
+  const dx=Math.cos(perp), dy=-Math.sin(perp); // note: screen y is flipped
+  const isEnd=(i===0||i===n-1);
+  ctx.strokeStyle=isEnd?"#fff":"#fab219"; ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(c.x+dx*hw,c.y+dy*hw);ctx.lineTo(c.x-dx*hw,c.y-dy*hw);ctx.stroke();
+  ctx.fillStyle=isEnd?"#fff":"#fab219";ctx.beginPath();ctx.arc(c.x,c.y,4,0,7);ctx.fill();
+  ctx.fillStyle="#000";ctx.font="bold 10px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";
+  const label=i===0?"S":(i===n-1?"F":String(i));
+  ctx.fillStyle="rgba(0,0,0,.7)";ctx.fillRect(c.x+7,c.y-8,g.name.length*6+8,15);
+  ctx.fillStyle="#fff";ctx.textAlign="left";ctx.fillText(g.name,c.x+11,c.y);
+}
+function drawCursorDots(ctx,tf){
+  for(const run of displayRuns()){
+    const t=timeAtDistFromStart(run,app.cursorDist); if(t==null)continue;
+    const pos=gpsPosAtTime(run,t); if(!pos)continue;
+    const q=tf.toPx(pos.lat,pos.lon);
+    ctx.fillStyle=colorFor(run.id);ctx.strokeStyle="#000";ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(q.x,q.y,5,0,7);ctx.fill();ctx.stroke();
+  }
+}
+function drawDeltaColoredPath(ctx,tf,run,pts){
+  pts=pts||runDrawPoints(run);
+  const ref=app.runs.find(r=>r.id===app.refRunId); const st=runStart(run);
+  if(!ref||run.id===app.refRunId||st==null){
+    ctx.strokeStyle=colorFor(run.id);ctx.lineWidth=2.2;ctx.beginPath();
+    pts.forEach((p,i)=>{const q=tf.toPx(p.lat,p.lon);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.stroke();return;}
+  ctx.lineWidth=3.2;
+  for(let i=1;i<pts.length;i++){
+    const d=gpsDistAtTime(run,pts[i].t)-st.distAlong;
+    const dl=deltaAt(run,ref,d);
+    const scale=8000; // ms range for full color
+    ctx.strokeStyle=dl==null?"#444":divColor(-dl/scale); // negative delta (ahead) -> blue
+    const a=tf.toPx(pts[i-1].lat,pts[i-1].lon), b=tf.toPx(pts[i].lat,pts[i].lon);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+}
+function sampleTelAt(run,t,key){
+  const i=bsearchTime(run.tel,t),j=Math.min(i+1,run.tel.length-1);
+  if(j===i)return run.tel[i][key];
+  const f=(t-run.tel[i].t)/(run.tel[j].t-run.tel[i].t||1);
+  return run.tel[i][key]+(run.tel[j][key]-run.tel[i][key])*f;
+}
+function sampleGpsAt(run,t,key){
+  const g=run.gps; if(!g.length)return null;
+  const i=bsearchTime(g,t),j=Math.min(i+1,g.length-1);
+  if(j===i)return g[i][key];
+  const f=(t-g[i].t)/(g[j].t-g[i].t||1);
+  return g[i][key]+(g[j][key]-g[i][key])*f;
+}
+// Catalog of comparable channels. GPS speed comes from the GPS track (m/s → display units); the rest from board telemetry.
+const CHANNEL_CATALOG={
+  gpsSpd:{label:"GPS speed",source:"gps",key:"spd",unit:()=>spdUnit(),conv:v=>convSpd(v*3.6),dec:1},
+  spd:{label:"Board speed",source:"tel",key:"spd",unit:()=>spdUnit(),conv:v=>convSpd(v),dec:1},
+  duty:{label:"Duty cycle",source:"tel",key:"duty",unit:()=>"%",conv:v=>v*100,dec:0},
+  motorTemp:{label:"Motor temp",source:"tel",key:"motorTemp",unit:()=>tempUnit(),conv:v=>convTemp(v),dec:0},
+  ctrlTemp:{label:"Controller temp",source:"tel",key:"ctrlTemp",unit:()=>tempUnit(),conv:v=>convTemp(v),dec:0},
+  volts:{label:"Battery volts",source:"tel",key:"volts",unit:()=>"V",conv:v=>v,dec:1},
+  battPct:{label:"Battery %",source:"tel",key:"battPct",unit:()=>"%",conv:v=>v*100,dec:0},
+  motorCurrent:{label:"Motor current",source:"tel",key:"motorCurrent",unit:()=>"A",conv:v=>v,dec:0},
+  pitch:{label:"Pitch angle",source:"tel",key:"pitch",unit:()=>"°",conv:v=>v,dec:1},
+  roll:{label:"Roll angle",source:"tel",key:"roll",unit:()=>"°",conv:v=>v,dec:1},
+  throttle:{label:"Throttle",source:"tel",key:"throttle",unit:()=>"",conv:v=>v,dec:0},
+  altitude:{label:"Altitude",source:"gps",key:"alt",unit:()=>"m",conv:v=>v,dec:0},
+};
+// avg/min/max of a catalog channel over a time window (display units); works for GPS- and telemetry-sourced channels.
+function channelStat(run,tIn,tOut,id){
+  const ch=CHANNEL_CATALOG[id]; if(!ch)return {min:null,max:null,avg:null,n:0};
+  const arr=ch.source==="gps"?run.gps:run.tel; if(!arr.length)return {min:null,max:null,avg:null,n:0};
+  let a=bsearchTime(arr,tIn); if(arr[a]&&arr[a].t<tIn)a++;
+  const b=bsearchTime(arr,tOut);
+  let mn=Infinity,mx=-Infinity,sum=0,n=0;
+  for(let i=a;i<=b;i++){const s=arr[i]; if(!s)continue; let v=s[ch.key]; if(v==null||!isFinite(v))continue; v=ch.conv(v);
+    if(v<mn)mn=v; if(v>mx)mx=v; sum+=v; n++;}
+  return n?{min:mn,max:mx,avg:sum/n,n}:{min:null,max:null,avg:null,n:0};
+}
+function fmtChan(id,v){return v==null||!isFinite(v)?"—":v.toFixed(CHANNEL_CATALOG[id].dec||0);}
+function selectedChannels(){return app.channels.filter(id=>CHANNEL_CATALOG[id]);}
+const CHANNEL_ORDER=["gpsSpd","spd","duty","motorTemp","ctrlTemp","volts","battPct","motorCurrent","pitch","roll","throttle","altitude"];
+function sampleChannel(run,t,id){const ch=CHANNEL_CATALOG[id];if(!ch)return null;
+  const raw=ch.source==="gps"?sampleGpsAt(run,t,ch.key):sampleTelAt(run,t,ch.key);
+  return raw==null?null:ch.conv(raw);}
+function updateMapLegend(){
+  const el=document.getElementById("mapLegend");
+  if(app.setup){el.classList.add("hidden");return;}
+  el.classList.remove("hidden");
+  if(app.channel!=="delta" && CHANNEL_CATALOG[app.channel]){
+    const ch=CHANNEL_CATALOG[app.channel];const u=ch.unit();
+    el.innerHTML=`<b>${ch.label}${u?" ("+u+")":""}</b><div style="height:8px;margin:5px 0;border-radius:4px;background:linear-gradient(90deg,${SEQ.slice().reverse().join(',')})"></div>
+      <div style="display:flex;justify-content:space-between"><span>low</span><span>high</span></div>`;
+  } else if(app.channel==="delta"){
+    el.innerHTML=`<b>Δ vs reference</b><div style="height:8px;margin:5px 0;border-radius:4px;background:linear-gradient(90deg,#d03b3b,#5a5a57,#3987e5)"></div>
+      <div style="display:flex;justify-content:space-between"><span>behind</span><span>ahead</span></div>`;
+  } else el.classList.add("hidden");
+}
+
+/* ---------- alignment helpers (distance-from-start axis) ------------------ */
+function runStart(run){ // returns Start crossing {t,distAlong} for current track, or null
+  const cr=app.crossings[run.id]; if(!cr||!cr[0])return null; return cr[0];
+}
+function runFinish(run){const cr=app.crossings[run.id];const t=currentTrack();if(!cr||!t)return null;return cr[t.gates.length-1];}
+// time-since-start as function of distance-from-start, sampled per run (only within [start,finish])
+function buildDistTime(run){
+  const st=runStart(run), fi=runFinish(run); if(!st)return null;
+  const pts=[]; const endT=fi?fi.t:run.gps[run.gps.length-1].t;
+  for(const p of run.gps){ if(p.t<st.t||p.t>endT)continue;
+    pts.push({d:gpsDistAtTime(run,p.t)-st.distAlong, t:p.t-st.t});}
+  return pts.length?pts:null;
+}
+const _distTimeCache={};
+function distTime(run){if(_distTimeCache[run.id])return _distTimeCache[run.id];const v=buildDistTime(run);_distTimeCache[run.id]=v;return v;}
+function timeAtDistFromStart(run,d){ // ms since start at distance d (m), interpolated
+  const st=runStart(run); if(st==null)return null;
+  const arr=distTime(run); if(!arr)return null;
+  if(d<=arr[0].d)return st.t+arr[0].t;
+  if(d>=arr[arr.length-1].d)return st.t+arr[arr.length-1].t;
+  let lo=0,hi=arr.length-1;while(lo<hi){const m=(lo+hi)>>1;if(arr[m].d<d)lo=m+1;else hi=m;}
+  const b=arr[lo],a=arr[lo-1]||arr[0];const f=(d-a.d)/((b.d-a.d)||1);
+  return st.t+a.t+(b.t-a.t)*f;
+}
+function timeSinceStartAtDist(run,d){const t=timeAtDistFromStart(run,d);const st=runStart(run);return (t==null||!st)?null:t-st.t;}
+function deltaAt(run,ref,d){ // ms: run time - ref time at distance d
+  const a=timeSinceStartAtDist(run,d), b=timeSinceStartAtDist(ref,d);
+  return (a==null||b==null)?null:a-b;
+}
+function courseLength(){ // max common distance across runs that crossed start
+  let m=Infinity;let any=false;
+  for(const run of displayRuns()){const arr=distTime(run);if(!arr)continue;any=true;m=Math.min(m,arr[arr.length-1].d);}
+  return any?m:0;
+}
+
+/* ---------- (8) generic canvas chart helper ------------------------------- */
+function setupCanvas(cv,cssH){
+  const w=cv.parentElement.clientWidth-2; const h=cssH;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+"px";
+  const ctx=cv.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+const CH={m:{l:52,r:14,t:12,b:28}};
+function axes(ctx,w,h,xr,yr,xlab,ylab,fmtX,fmtY){
+  const m=CH.m; const px=x=>m.l+(x-xr[0])/(xr[1]-xr[0]||1)*(w-m.l-m.r);
+  const py=y=>h-m.b-(y-yr[0])/(yr[1]-yr[0]||1)*(h-m.t-m.b);
+  ctx.strokeStyle="#2c2c2a";ctx.lineWidth=1;ctx.fillStyle="#898781";ctx.font="10px system-ui";
+  const ny=4; for(let i=0;i<=ny;i++){const v=yr[0]+(yr[1]-yr[0])*i/ny;const y=py(v);
+    ctx.beginPath();ctx.moveTo(m.l,y);ctx.lineTo(w-m.r,y);ctx.stroke();
+    ctx.textAlign="right";ctx.textBaseline="middle";ctx.fillText(fmtY?fmtY(v):v.toFixed(0),m.l-5,y);}
+  const nx=5; for(let i=0;i<=nx;i++){const v=xr[0]+(xr[1]-xr[0])*i/nx;const x=px(v);
+    ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(fmtX?fmtX(v):v.toFixed(0),x,h-m.b+5);}
+  ctx.fillStyle="#c3c2b7";ctx.textAlign="center";
+  if(xlab)ctx.fillText(xlab,m.l+(w-m.l-m.r)/2,h-11);
+  if(ylab){ctx.save();ctx.translate(12,m.t+(h-m.t-m.b)/2);ctx.rotate(-Math.PI/2);ctx.fillText(ylab,0,0);ctx.restore();}
+  return {px,py};
+}
+function lineSeries(ctx,map,pts,color,width){ctx.strokeStyle=color;ctx.lineWidth=width||2;ctx.beginPath();
+  let started=false;for(const p of pts){if(p==null||!isFinite(p.y)){started=false;continue;}const x=map.px(p.x),y=map.py(p.y);
+    started?ctx.lineTo(x,y):ctx.moveTo(x,y);started=true;}ctx.stroke();}
+
+/* ---------- (9) views ----------------------------------------------------- */
+function recomputeCrossings(){
+  app.crossings={}; Object.keys(_distTimeCache).forEach(k=>delete _distTimeCache[k]);
+  const t=currentTrack(); if(!t)return;
+  for(const run of app.runs){
+    app.crossings[run.id]=detectCrossings(run,t.gates,t.lat0,t.lon0);
+  }
+}
+function segMetric(run,i){ // metric for segment i (between gate i and i+1)
+  const cr=app.crossings[run.id]; if(!cr||!cr[i]||!cr[i+1])return null;
+  return segmentMetrics(run,cr[i].t,cr[i+1].t,app.ridingSet,app.fallMinSpd);
+}
+function segSplitMs(run,i){const cr=app.crossings[run.id];return (cr&&cr[i]&&cr[i+1])?cr[i+1].t-cr[i].t:null;}
+function totalMs(run){const cr=app.crossings[run.id];const t=currentTrack();if(!cr||!t)return null;
+  const s=cr[0],f=cr[t.gates.length-1];return (s&&f)?f.t-s.t:null;}
+
+function runsManagerHTML(all){
+  let h='<div class="runs-mgr">';
+  for(const r of all){const on=r.enabled!==false;
+    h+=`<div class="run-row${on?'':' off'}" title="${on?'Enabled':'Disabled'} — toggle to include in comparisons">
+      <input type="color" class="run-color" data-run="${r.id}" value="${colorFor(r.id)}" title="Run color">
+      <input type="checkbox" class="run-enable" data-run="${r.id}" ${on?'checked':''} title="Enable / disable">
+      <span class="run-nm">${runName(r)}</span>
+      <button class="run-remove danger" data-run="${r.id}" title="Remove this run">✕</button>
+    </div>`;}
+  return h+'</div>';
+}
+function renderSplits(){
+  const el=document.getElementById("view-splits");
+  const all=app.runs;
+  if(!all.length){el.innerHTML='<div class="empty">Import one or more Floaty <code>.json</code> logs to begin.<br>Then create a track to place start / split / finish gates.</div>';return;}
+  const runs=displayRuns();
+  let html=runsManagerHTML(all);
+  if(!runs.length){el.innerHTML=html+'<div class="empty">All runs are disabled — enable one above to compare.</div>';return;}
+  // summary cards (whole-run)
+  html+='<div class="cards">';
+  for(const run of runs){
+    const m=segmentMetrics(run,run.tel[0].t,run.tel[run.tel.length-1].t,app.ridingSet,app.fallMinSpd);
+    const col=colorFor(run.id);
+    html+=`<div class="card"><div class="name"><span class="swatch" style="background:${col}"></span>${runName(run)}</div>`;
+    html+=kv("Ride time",fmtDur(run.meta.endTime-run.meta.startTime));
+    html+=kv("Distance",(run.meta.distance!=null?run.meta.distance.toFixed(2)+" (log)":"—"));
+    const tIn=run.tel[0].t, tOut=run.tel[run.tel.length-1].t;
+    for(const id of selectedChannels()){const ch=CHANNEL_CATALOG[id];const st=channelStat(run,tIn,tOut,id);const u=ch.unit();
+      html+=kv(ch.label, st.avg==null?"—":`${fmtChan(id,st.avg)} avg · ${fmtChan(id,st.max)} max${u?" "+u:""}`);}
+    html+=kv("Offs",m.fallCount+" · "+fmtDur(m.totalDowntimeMs)+" down");
+    html+=kv("Battery used",((m.battPctStart-m.battPctEnd)*100).toFixed(0)+"% · "+(m.whEnd-m.whStart).toFixed(0)+" Wh");
+    html+=`</div>`;
+  }
+  html+='</div>';
+
+  const t=currentTrack();
+  if(!t){html+='<div class="empty">No track selected — showing whole-run summaries only.<br>Create or pick a track to see per-segment splits, deltas, and the theoretical best.</div>';el.innerHTML=html;return;}
+  // splits table
+  const gates=t.gates, nseg=gates.length-1;
+  html+='<h3 style="margin-bottom:8px">Splits — '+t.name+'</h3>';
+  html+='<div style="overflow:auto"><table><thead><tr><th>Segment</th>';
+  for(const run of runs)html+=`<th><span class="swatch" style="display:inline-block;background:${colorFor(run.id)}"></span> ${runName(run)}</th>`;
+  html+='<th>Theoretical best</th></tr></thead><tbody>';
+  const tbTotals=[];
+  for(let i=0;i<nseg;i++){
+    const label=gates[i].name+" → "+gates[i+1].name;
+    const vals=runs.map(r=>segSplitMs(r,i));
+    const best=Math.min(...vals.filter(v=>v!=null));
+    let bestRun=null;vals.forEach((v,ri)=>{if(v===best)bestRun=runs[ri];});
+    tbTotals.push({best,bestRun});
+    html+=`<tr><td>${label}</td>`;
+    vals.forEach(v=>{html+=`<td class="${v==null?'na':(v===best?'best':'')}">${v==null?'N/A':fmtTime(v)}</td>`;});
+    html+=`<td class="best">${isFinite(best)?fmtTime(best):'—'}${bestRun?` <span class="delta">${runName(bestRun)}</span>`:''}</td></tr>`;
+  }
+  // totals
+  const tbSum=tbTotals.reduce((a,x)=>a+(isFinite(x.best)?x.best:0),0);
+  const allSeg=tbTotals.every(x=>isFinite(x.best));
+  html+=`<tr class="total"><td>Total</td>`;
+  const totals=runs.map(r=>totalMs(r));const bestTotal=Math.min(...totals.filter(v=>v!=null));
+  totals.forEach(v=>{html+=`<td class="${v==null?'na':(v===bestTotal?'best':'')}">${v==null?'N/A':fmtTime(v)}</td>`;});
+  html+=`<td class="best">${allSeg?fmtTime(tbSum):'—'}</td></tr>`;
+  html+='</tbody></table></div>';
+  if(allSeg && isFinite(bestTotal)) html+=`<p class="sub" style="margin-top:8px">Theoretical best <b>${fmtTime(tbSum)}</b> is ${fmtTime(bestTotal-tbSum)} faster than the best actual run — the sum of each segment's fastest split.</p>`;
+
+  // per-segment breakdown — one block per segment, runs ranked fastest-first
+  html+='<h3 style="margin:20px 0 10px">Per-segment breakdown</h3>';
+  for(let i=0;i<nseg;i++){
+    const entries=runs.map(run=>({run,split:segSplitMs(run,i),m:segMetric(run,i)})).filter(e=>e.m);
+    if(!entries.length)continue;
+    const timed=entries.filter(e=>e.split!=null);
+    timed.sort((a,b)=>a.split-b.split);
+    const untimed=entries.filter(e=>e.split==null);
+    const ordered=timed.concat(untimed);
+    const best=timed.length?timed[0].split:null;
+    const winner=timed.length?timed[0].run:null;
+    const chans=selectedChannels();
+    html+=`<div class="seg-block"><div class="seg-title">${gates[i].name} → ${gates[i+1].name}`+
+      (winner?`<span class="win">fastest: ${runName(winner)} · ${fmtTime(best)}</span>`:'')+`</div>`;
+    html+='<div style="overflow:auto"><table><thead><tr><th class="rank">#</th><th>Run</th><th>Split</th><th>Δ best</th>'+
+      chans.map(id=>`<th>${CHANNEL_CATALOG[id].label} max${CHANNEL_CATALOG[id].unit()?' ('+CHANNEL_CATALOG[id].unit()+')':''}</th>`).join('')+
+      `<th>Elev +/−</th><th>Offs</th><th>Recovery</th></tr></thead><tbody>`;
+    ordered.forEach((e,rank)=>{const m=e.m;const isBest=e.split!=null&&e.split===best;
+      const rc=app.crossings[e.run.id];
+      html+=`<tr><td class="rank">${e.split==null?'–':rank+1}</td>
+        <td><span class="swatch" style="display:inline-block;background:${colorFor(e.run.id)}"></span> ${runName(e.run)}</td>
+        <td class="${e.split==null?'na':(isBest?'best':'')}">${e.split==null?'N/A':fmtTime(e.split)}</td>
+        <td class="delta">${e.split==null?'—':(isBest?'—':'+'+fmtTime(e.split-best))}</td>`+
+        chans.map(id=>`<td>${fmtChan(id,channelStat(e.run,rc[i].t,rc[i+1].t,id).max)}</td>`).join('')+
+        `<td>+${m.elevGain.toFixed(0)}/−${m.elevLoss.toFixed(0)}m</td>
+        <td>${m.fallCount}</td><td>${fmtDur(m.totalDowntimeMs)}</td></tr>`;
+    });
+    html+='</tbody></table></div></div>';
+  }
+  el.innerHTML=html;
+}
+function kv(k,v){return `<div class="kv"><span>${k}</span><b>${v}</b></div>`;}
+
+function renderDelta(){
+  const el=document.getElementById("view-delta");
+  const ref=app.runs.find(r=>r.id===app.refRunId);
+  if(!currentTrack()){el.innerHTML='<div class="empty">Select a track to compute time deltas along the course.</div>';return;}
+  if(!ref){el.innerHTML='<div class="empty">Pick a reference run (top-right).</div>';return;}
+  const L=courseLength(); if(!L){el.innerHTML='<div class="empty">No runs cross the Start gate yet.</div>';return;}
+  el.innerHTML=`<div class="chart-block"><h3>Time delta vs ${runName(ref)}</h3>
+    <p class="sub">Cumulative seconds gained (below zero = ahead of reference) / lost, over distance from Start.</p>
+    ${legendHTML(displayRuns().filter(r=>r.id!==ref.id))}
+    <canvas class="chart" id="deltaCv"></canvas></div>`;
+  const cv=document.getElementById("deltaCv");
+  const draw=()=>{
+    const {ctx,w,h}=setupCanvas(cv,300);
+    // build series
+    const N=160;const series=[];let ymn=0,ymx=0;
+    for(const run of displayRuns()){ if(run.id===ref.id)continue; const pts=[];
+      for(let i=0;i<=N;i++){const d=L*i/N;const dl=deltaAt(run,ref,d);const y=dl==null?null:dl/1000;
+        if(y!=null){ymn=Math.min(ymn,y);ymx=Math.max(ymx,y);}pts.push({x:d,y});}
+      series.push({run,pts});}
+    const pad=(ymx-ymn)*0.1||1;const yr=[ymn-pad,ymx+pad];
+    const map=axes(ctx,w,h,[0,L],yr,"Distance from start (m)","Δ time (s)",v=>v.toFixed(0),v=>v.toFixed(1));
+    // zero line
+    ctx.strokeStyle="#585856";ctx.lineWidth=1.4;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(map.px(0),map.py(0));ctx.lineTo(map.px(L),map.py(0));ctx.stroke();ctx.setLineDash([]);
+    for(const s of series)lineSeries(ctx,map,s.pts,colorFor(s.run.id),2.2);
+    drawCursorLine(ctx,map,w,h,L);
+  };
+  cv._draw=draw; draw();
+  attachCursor(cv,L);
+}
+function legendHTML(runs){return '<div class="legend">'+runs.map(r=>`<span class="item"><span class="swatch" style="background:${colorFor(r.id)}"></span>${runName(r)}</span>`).join('')+'</div>';}
+
+function renderChannels(){
+  const el=document.getElementById("view-channels");
+  if(!currentTrack()){el.innerHTML='<div class="empty">Select a track to plot channels on a common distance axis.</div>';return;}
+  const L=courseLength(); if(!L){el.innerHTML='<div class="empty">No runs cross the Start gate yet.</div>';return;}
+  const chans=app.channels.filter(id=>CHANNEL_CATALOG[id]);
+  if(!chans.length){el.innerHTML='<div class="empty">No stats selected — pick some in ⚙ Settings → “Stats to compare”.</div>';return;}
+  let html=legendHTML(displayRuns())+'<p class="sub" style="margin:-4px 0 10px">Choose which stats appear here in ⚙ Settings → “Stats to compare”.</p>';
+  for(const id of chans){const ch=CHANNEL_CATALOG[id];const u=ch.unit();
+    html+=`<div class="chart-block"><h3>${ch.label}${u?' ('+u+')':''}</h3><canvas class="chart" id="cv_${id}"></canvas></div>`;}
+  el.innerHTML=html;
+  for(const id of chans)plotChannelVsDist(document.getElementById("cv_"+id),id,L);
+}
+// Draw one catalog channel as a line per run vs distance-from-start, with the linked cursor.
+function plotChannelVsDist(cv,id,L){
+  const ch=CHANNEL_CATALOG[id];
+  const draw=()=>{
+    const {ctx,w,h}=setupCanvas(cv,190);
+    const N=200;const series=[];let ymn=Infinity,ymx=-Infinity;
+    for(const run of displayRuns()){const st=runStart(run);if(st==null)continue;const pts=[];
+      for(let i=0;i<=N;i++){const d=L*i/N;const t=timeAtDistFromStart(run,d);
+        const y=t==null?null:sampleChannel(run,t,id);
+        if(y!=null&&isFinite(y)){ymn=Math.min(ymn,y);ymx=Math.max(ymx,y);}pts.push({x:d,y});}
+      series.push({run,pts});}
+    if(!isFinite(ymn)){ymn=0;ymx=1;}
+    const pad=(ymx-ymn)*0.05||1;
+    const map=axes(ctx,w,h,[0,L],[ymn-pad*0.2,ymx+pad],"Distance from start (m)",ch.unit(),v=>v.toFixed(0),v=>v.toFixed(0));
+    for(const s of series)lineSeries(ctx,map,s.pts,colorFor(s.run.id),1.9);
+    drawCursorLine(ctx,map,w,h,L);
+  };
+  cv._draw=draw;draw();attachCursor(cv,L);
+}
+let _cursorCanvases=[];
+function attachCursor(cv,L){
+  _cursorCanvases.push(cv);
+  cv.onmousemove=e=>{const r=cv.getBoundingClientRect();const x=e.clientX-r.left;
+    const m=CH.m;const frac=(x-m.l)/(cv.clientWidth-m.l-m.r);app.cursorDist=Math.max(0,Math.min(1,frac))*L;
+    redrawCursorAll();drawMap();};
+  cv.onmouseleave=()=>{app.cursorDist=null;redrawCursorAll();drawMap();};
+}
+function redrawCursorAll(){_cursorCanvases.forEach(c=>{if(document.body.contains(c)&&c._draw)c._draw();});}
+function drawCursorLine(ctx,map,w,h,L){
+  if(app.cursorDist==null)return;const x=map.px(app.cursorDist);
+  ctx.strokeStyle="rgba(255,255,255,.5)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(x,CH.m.t);ctx.lineTo(x,h-CH.m.b);ctx.stroke();ctx.setLineDash([]);
+}
+
+function renderDist(){
+  const el=document.getElementById("view-dist");
+  const runs=displayRuns();if(!runs.length){el.innerHTML='<div class="empty">Import runs first.</div>';return;}
+  el.innerHTML=`${legendHTML(runs)}
+    <div class="chart-block"><h3>Duty-cycle exposure</h3><p class="sub">% of riding time spent in each duty band. Sustained time above ~80% risks pushback / nosedive.</p><canvas class="chart" id="dutyHist"></canvas></div>
+    <div class="chart-block"><h3>Speed distribution</h3><p class="sub">% of riding time in each speed band (${spdUnit()}).</p><canvas class="chart" id="spdHist"></canvas></div>`;
+  drawHist("dutyHist",runs,s=>s.duty*100,[0,100],10,"Duty %","% of time",v=>v.toFixed(0));
+  const maxSpd=Math.max(...runs.flatMap(r=>r.tel.map(s=>convSpd(s.spd))));
+  drawHist("spdHist",runs,s=>convSpd(s.spd),[0,Math.ceil(maxSpd/10)*10],Math.max(8,Math.ceil(maxSpd/10)),spdUnit(),"% of time",v=>v.toFixed(0));
+}
+function drawHist(id,runs,accessor,range,nbins,xlab,ylab,fmtX){
+  const cv=document.getElementById(id);
+  const draw=()=>{
+    const {ctx,w,h}=setupCanvas(cv,220);
+    const bw=(range[1]-range[0])/nbins;
+    const dataset=runs.map(run=>{const bins=new Array(nbins).fill(0);let n=0;
+      for(const s of run.tel){if(!app.ridingSet.has(s.state))continue;const v=accessor(s);if(v<range[0]||v>range[1])continue;
+        let bi=Math.min(nbins-1,Math.floor((v-range[0])/bw));bins[bi]++;n++;}
+      return {run,bins:bins.map(b=>n?b/n*100:0)};});
+    let ymx=Math.max(1,...dataset.flatMap(d=>d.bins));
+    const map=axes(ctx,w,h,[range[0],range[1]],[0,ymx*1.08],xlab,ylab,fmtX,v=>v.toFixed(0));
+    const groupW=(map.px(range[0]+bw)-map.px(range[0]));
+    const barW=groupW/(runs.length+0.5);
+    dataset.forEach((d,ri)=>{ctx.fillStyle=colorFor(d.run.id);
+      d.bins.forEach((val,bi)=>{const x0=map.px(range[0]+bi*bw)+ri*barW+2;const y=map.py(val);
+        const bh=map.py(0)-y;if(bh>0){ctx.fillRect(x0,y,Math.max(1,barW-1.5),bh);}});});
+  };
+  cv._draw=draw;draw();
+}
+
+function renderPower(){
+  const el=document.getElementById("view-power");
+  const runs=displayRuns();if(!runs.length){el.innerHTML='<div class="empty">Import runs first.</div>';return;}
+  const U=tempUnit();
+  // efficiency + battery + thermal peaks table
+  let html='<div style="overflow:auto"><table><thead><tr><th>Run</th><th>Wh used</th><th>Batt used</th><th>Wh/km</th><th>Min volts</th><th>Motor '+U+'</th><th>Ctrl '+U+'</th></tr></thead><tbody>';
+  for(const run of runs){const m=segmentMetrics(run,run.tel[0].t,run.tel[run.tel.length-1].t,app.ridingSet,app.fallMinSpd);
+    const whUsed=m.whEnd-m.whStart;const km=run.meta.distance!=null?run.meta.distance*1.60934:null;
+    html+=`<tr><td><span class="swatch" style="display:inline-block;background:${colorFor(run.id)}"></span> ${runName(run)}</td>
+      <td>${whUsed.toFixed(0)}</td><td>${((m.battPctStart-m.battPctEnd)*100).toFixed(0)}%</td>
+      <td>${km?(whUsed/km).toFixed(1):'—'}</td><td>${m.volts.min.toFixed(1)}</td>
+      <td>${convTemp(m.motorTemp.max).toFixed(0)}</td><td>${convTemp(m.ctrlTemp.max).toFixed(0)}</td></tr>`;}
+  html+='</tbody></table></div>';
+  if(!currentTrack()){el.innerHTML=html+'<p class="sub" style="margin-top:12px">Select a track to plot motor &amp; controller temperature over the course.</p>';return;}
+  const L=courseLength();
+  if(!L){el.innerHTML=html+'<p class="sub" style="margin-top:12px">No runs cross the Start gate yet.</p>';return;}
+  html+=`${legendHTML(runs)}
+    <div class="chart-block" style="margin-top:14px"><h3>Motor temperature (${U})</h3><canvas class="chart" id="cv_motorTemp"></canvas></div>
+    <div class="chart-block"><h3>Controller temperature (${U})</h3><canvas class="chart" id="cv_ctrlTemp"></canvas></div>`;
+  el.innerHTML=html;
+  plotChannelVsDist(document.getElementById("cv_motorTemp"),"motorTemp",L);
+  plotChannelVsDist(document.getElementById("cv_ctrlTemp"),"ctrlTemp",L);
+}
+
+// Time window falls are counted over: the course (Start→Finish) when a track is selected, else the whole ride.
+function fallWindow(run){
+  const t=currentTrack();
+  if(t){const s=runStart(run),f=runFinish(run);if(s&&f)return {a:s.t,b:f.t};}
+  return {a:run.tel[0].t,b:run.tel[run.tel.length-1].t};
+}
+function runFalls(run){const {a,b}=fallWindow(run);return findFalls(telWindow(run,a,b),app.ridingSet,app.fallMinSpd);}
+function renderFalls(){
+  const el=document.getElementById("view-falls");
+  const runs=displayRuns();if(!runs.length){el.innerHTML='<div class="empty">Import runs first.</div>';return;}
+  const onTrack=!!currentTrack();
+  let html=onTrack?'<p class="sub" style="margin:0 0 10px">Showing only offs between the Start and Finish gates of <b>'+currentTrack().name+'</b>.</p>':'';
+  for(const run of runs){
+    const falls=runFalls(run);
+    const downtime=falls.reduce((a,f)=>a+(f.recoveryMs||0),0);
+    html+=`<div class="chart-block"><h3><span class="swatch" style="display:inline-block;background:${colorFor(run.id)}"></span> ${runName(run)} — ${falls.length} off${falls.length!==1?'s':''}, ${fmtDur(downtime)} total recovery</h3>`;
+    if(!falls.length){html+=`<p class="sub">No offs${onTrack?' on this track':''}.</p></div>`;continue;}
+    html+='<div class="falls-list">';
+    falls.forEach((f,i)=>{const rel=(f.t-run.meta.startTime)/1000;
+      html+=`<div class="f"><span>#${i+1}</span><span>t+${rel.toFixed(0)}s</span>
+        <span class="pill">${STATE_LABELS[f.state]||('state '+f.state)}</span>
+        <span>${convSpd(f.spdAt).toFixed(1)} ${spdUnit()} at onset · recovered in ${f.recoveryMs==null?'—':(f.recoveryMs/1000).toFixed(1)+'s'}</span></div>`;});
+    html+='</div></div>';
+  }
+  el.innerHTML=html;
+}
+
+function renderActive(){
+  const map={splits:renderSplits,delta:renderDelta,channels:renderChannels,dist:renderDist,power:renderPower,falls:renderFalls};
+  _cursorCanvases=[];
+  (map[app.activeView]||renderSplits)();
+}
+function renderAll(){drawMap();renderActive();updateFoot();}
+
+/* ---------- (10) wiring --------------------------------------------------- */
+function updateFoot(){
+  document.getElementById("footRuns").textContent=app.runs.length?`${app.runs.length} run${app.runs.length>1?'s':''} loaded`:"No runs loaded";
+  const t=currentTrack();document.getElementById("footTrack").textContent=t?`Track: ${t.name} · ${t.gates.length} gates`:"";
+}
+function refreshTrackSel(){
+  const sel=document.getElementById("trackSel");sel.innerHTML='<option value="">— none —</option>';
+  for(const t of app.tracks){const o=document.createElement("option");o.value=t.id;o.textContent=t.name;sel.appendChild(o);}
+  sel.value=app.currentTrackId;
+  document.getElementById("delTrackBtn").classList.toggle("hidden",!app.currentTrackId);
+  document.getElementById("editTrackBtn").classList.toggle("hidden",!app.currentTrackId);
+}
+function refreshRefSel(){
+  const sel=document.getElementById("refSel");sel.innerHTML='';
+  const runs=displayRuns();
+  for(const r of runs){const o=document.createElement("option");o.value=r.id;o.textContent=runName(r);sel.appendChild(o);}
+  if(!runs.some(r=>r.id===app.refRunId))app.refRunId=runs.length?runs[0].id:"";
+  sel.value=app.refRunId;
+}
+
+async function importFiles(files){
+  let added=0;
+  for(const file of files){
+    try{
+      const text=await file.text();const json=JSON.parse(text);
+      const run=parseFloatyLog(json,file.name.replace(/\.json$/i,''));
+      run.name=file.name.replace(/\.json$/i,'');
+      if(app.runs.some(r=>r.id===run.id)){toast("Already loaded: "+run.name);continue;}
+      run.color=RUN_COLORS[app.runs.length%RUN_COLORS.length];
+      run.enabled=true;
+      app.runs.push(run);
+      await DB.put("runs",run);added++;
+    }catch(err){toast("Failed: "+file.name+" — "+err.message);console.error(err);}
+  }
+  if(added){toast(`Imported ${added} run${added>1?'s':''}`);}
+  if(currentTrack())recomputeCrossings();
+  resetMapView();refreshRefSel();renderAll();
+}
+
+function refRunForSetup(){ // the run whose path is shown/snapped-to during setup (may be null)
+  if(!app.setup)return null;
+  return app.runs.find(r=>r.id===app.setup.refRunId) || app.runs[0] || null;
+}
+function enterSetupUI(modeText,hintText){
+  document.getElementById("mapMode").textContent=modeText;
+  document.getElementById("saveTrackBtn").classList.remove("hidden");
+  document.getElementById("cancelSetupBtn").classList.remove("hidden");
+  document.getElementById("newTrackBtn").disabled=true;
+  document.getElementById("editTrackBtn").disabled=true;
+  const hint=document.getElementById("mapHint");hint.classList.remove("hidden");hint.textContent=hintText;
+  resetMapView();renderGateEditor();drawMap();
+}
+function beginSetup(){
+  if(!app.runs.length){toast("Import a run first.");return;}
+  const refId=app.refRunId||app.runs[0].id;
+  app.setup={refRunId:refId,gates:[],editingId:null,moveIdx:null};
+  enterSetupUI("● New track: click the path to add gates (Start → splits → Finish)",
+    "Click along the reference run’s path to drop gates in order. First = Start, last = Finish.");
+}
+function beginEdit(){
+  const t=currentTrack(); if(!t){toast("Select a track first.");return;}
+  const refId=app.runs.some(r=>r.id===t.refRunId)?t.refRunId:(app.refRunId||(app.runs[0]&&app.runs[0].id)||"");
+  app.setup={refRunId:refId,editingId:t.id,moveIdx:null,
+    gates:t.gates.map((g,i)=>({name:g.name,order:i,lat:g.lat,lon:g.lon,headingRad:g.headingRad,widthM:g.widthM}))};
+  enterSetupUI("● Editing “"+t.name+"”: reorder (▲▼), Move, add or delete gates",
+    "Use ▲▼ to reorder splits, “Move” then click the map to reposition a gate, or click the path to append one.");
+}
+function cancelSetup(){
+  app.setup=null;
+  document.getElementById("mapMode").textContent="";
+  document.getElementById("saveTrackBtn").classList.add("hidden");
+  document.getElementById("cancelSetupBtn").classList.add("hidden");
+  document.getElementById("newTrackBtn").disabled=false;
+  document.getElementById("editTrackBtn").disabled=false;
+  document.getElementById("gateEditor").classList.add("hidden");
+  document.getElementById("mapHint").classList.add("hidden");
+  resetMapView();drawMap();
+}
+function renderGateEditor(){
+  const ed=document.getElementById("gateEditor");
+  if(!app.setup){ed.classList.add("hidden");return;}
+  ed.classList.remove("hidden");
+  const n=app.setup.gates.length;
+  let html=`<div class="row" style="font-weight:600;color:var(--ink-2)"><span>Gates (${n})</span><span class="spacer" style="flex:1"></span><span class="tag">order · move · width</span></div>`;
+  app.setup.gates.forEach((g,i)=>{
+    const role=i===0?"Start":(i===n-1&&n>1?"Finish":"Split "+i);
+    const armed=app.setup.moveIdx===i;
+    html+=`<div class="row"${armed?' style="background:var(--surface-3)"':''}><span class="gate-dot" style="background:${i===0||i===n-1?'#fff':'#fab219'}"></span>
+      <input type="text" data-gi="${i}" class="gname" value="${g.name.replace(/"/g,'&quot;')}">
+      <span class="tag">${role}</span>
+      <button data-gi="${i}" class="gup" title="move earlier" ${i===0?'disabled':''}>▲</button>
+      <button data-gi="${i}" class="gdown" title="move later" ${i===n-1?'disabled':''}>▼</button>
+      <button data-gi="${i}" class="gmove" title="click map to reposition" style="${armed?'background:var(--accent);color:#fff':''}">${armed?'click map…':'Move'}</button>
+      <input type="number" data-gi="${i}" class="gw" value="${g.widthM}" min="4" max="200" style="width:60px">
+      <button data-gi="${i}" class="gdel danger" title="remove">✕</button></div>`;
+  });
+  if(!n)html+='<div class="row"><span class="tag">No gates yet — click the map.</span></div>';
+  ed.innerHTML=html;
+  ed.querySelectorAll(".gname").forEach(inp=>inp.onchange=e=>{app.setup.gates[+e.target.dataset.gi].name=e.target.value;drawMap();});
+  ed.querySelectorAll(".gw").forEach(inp=>inp.onchange=e=>{app.setup.gates[+e.target.dataset.gi].widthM=+e.target.value||25;drawMap();});
+  ed.querySelectorAll(".gdel").forEach(b=>b.onclick=e=>{const i=+e.target.dataset.gi;app.setup.gates.splice(i,1);
+    if(app.setup.moveIdx===i)app.setup.moveIdx=null;renumberGates();renderGateEditor();drawMap();});
+  ed.querySelectorAll(".gup").forEach(b=>b.onclick=e=>moveGate(+e.target.dataset.gi,-1));
+  ed.querySelectorAll(".gdown").forEach(b=>b.onclick=e=>moveGate(+e.target.dataset.gi,1));
+  ed.querySelectorAll(".gmove").forEach(b=>b.onclick=e=>{const i=+e.target.dataset.gi;
+    app.setup.moveIdx=(app.setup.moveIdx===i)?null:i;renderGateEditor();});
+}
+function moveGate(i,dir){ // reorder split within the gate list
+  const j=i+dir, g=app.setup.gates; if(j<0||j>=g.length)return;
+  [g[i],g[j]]=[g[j],g[i]];
+  if(app.setup.moveIdx===i)app.setup.moveIdx=j; else if(app.setup.moveIdx===j)app.setup.moveIdx=i;
+  renumberGates();renderGateEditor();drawMap();
+}
+function renumberGates(){app.setup.gates.forEach((g,i)=>{g.order=i;});}
+function defaultGateName(i){return i===0?"Start":"Split "+i;}
+// snap a clicked lat/lon to the reference path (heading from nearest point); fallback keeps raw point.
+function snapToRef(lat,lon,prevHeading){
+  const ref=refRunForSetup();
+  if(ref){const near=headingAtNearest(ref,lat,lon);return {lat:near.lat,lon:near.lon,headingRad:near.headingRad};}
+  return {lat,lon,headingRad:prevHeading!=null?prevHeading:0};
+}
+
+function placeGateAt(clientX,clientY){
+  if(!app.setup||!mapTf)return;
+  const r=mapC.getBoundingClientRect();const px=clientX-r.left,py=clientY-r.top;
+  const world=mapTf.pxToWorld(px,py);const ll=mapTf.worldToLatLon(world.x,world.y);
+  if(app.setup.moveIdx!=null){ // reposition an existing gate
+    const g=app.setup.gates[app.setup.moveIdx];const s=snapToRef(ll.lat,ll.lon,g.headingRad);
+    g.lat=s.lat;g.lon=s.lon;g.headingRad=s.headingRad;app.setup.moveIdx=null;
+    renderGateEditor();drawMap();return;
+  }
+  const i=app.setup.gates.length;const s=snapToRef(ll.lat,ll.lon);
+  app.setup.gates.push({name:defaultGateName(i),order:i,lat:s.lat,lon:s.lon,headingRad:s.headingRad,widthM:app.gateWidth});
+  renderGateEditor();drawMap();
+}
+// pan (drag) + zoom (wheel); a click that didn't drag places/moves a gate in setup.
+let panning=null;
+mapC.addEventListener("mousedown",e=>{ if(e.button!==0||!mapTf)return;
+  panning={x:e.clientX,y:e.clientY,tx:mapView.tx,ty:mapView.ty,moved:false};
+  mapC.style.cursor="grabbing";
+});
+window.addEventListener("mousemove",e=>{ if(!panning)return;
+  const dx=e.clientX-panning.x, dy=e.clientY-panning.y;
+  if(Math.abs(dx)+Math.abs(dy)>4)panning.moved=true;
+  mapView.tx=panning.tx+dx; mapView.ty=panning.ty+dy; drawMap();
+});
+window.addEventListener("mouseup",e=>{ if(!panning)return;
+  const wasClick=!panning.moved; panning=null; mapC.style.cursor="";
+  if(wasClick && app.setup) placeGateAt(e.clientX,e.clientY);
+});
+mapC.addEventListener("wheel",e=>{ if(!mapTf)return; e.preventDefault();
+  const wrap=document.getElementById("mapWrap"), w=wrap.clientWidth, h=wrap.clientHeight;
+  const r=mapC.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  const nk=Math.max(0.5,Math.min(60,mapView.k*Math.exp(-e.deltaY*0.0015)));
+  const ratio=nk/mapView.k;                       // keep the point under the cursor fixed
+  mapView.tx = (mx-w/2) - (mx-w/2-mapView.tx)*ratio;
+  mapView.ty = (my-h/2) - (my-h/2-mapView.ty)*ratio;
+  mapView.k=nk; drawMap();
+},{passive:false});
+mapC.addEventListener("dblclick",e=>{ if(app.setup)return; resetMapView(); drawMap(); });
+
+document.getElementById("saveTrackBtn").onclick=()=>{
+  if(!app.setup||app.setup.gates.length<2){toast("Add at least a Start and a Finish gate.");return;}
+  const editing=app.setup.editingId?app.tracks.find(t=>t.id===app.setup.editingId):null;
+  const ref=refRunForSetup();
+  document.querySelector("#saveDlg .dlg-h").textContent=editing?"Save changes":"Save track";
+  document.getElementById("saveSummary").textContent=`${app.setup.gates.length} gates · reference: ${ref?runName(ref):"(not loaded)"}`;
+  document.getElementById("trackNameInp").value=editing?editing.name:"";
+  document.getElementById("saveDlg").showModal();
+  document.getElementById("trackNameInp").focus();
+};
+document.getElementById("saveConfirm").onclick=async()=>{
+  const editing=app.setup.editingId?app.tracks.find(t=>t.id===app.setup.editingId):null;
+  const name=document.getElementById("trackNameInp").value.trim()||(editing?editing.name:("Track "+(app.tracks.length+1)));
+  const ref=refRunForSetup();
+  // normalize untouched default names → Start / Split n / Finish
+  const n=app.setup.gates.length, autopat=/^(Start|Finish|Split \d+)$/;
+  const gates=app.setup.gates.map((g,i)=>({name:autopat.test(g.name)?(i===0?"Start":(i===n-1?"Finish":"Split "+i)):g.name,
+    order:i,lat:g.lat,lon:g.lon,headingRad:g.headingRad,widthM:g.widthM}));
+  let track;
+  if(editing){ // update in place, preserve id/createdAt and existing projection origin
+    track=editing; track.name=name; track.gates=gates;
+    if(ref){track.refRunId=ref.id;track.lat0=ref.meta.lat0;track.lon0=ref.meta.lon0;}
+  } else {
+    track={id:"t_"+Date.now(),name,createdAt:Date.now(),refRunId:ref?ref.id:"",
+      lat0:ref?ref.meta.lat0:app.setup.gates[0].lat,lon0:ref?ref.meta.lon0:app.setup.gates[0].lon,gates};
+    app.tracks.push(track);
+  }
+  await DB.put("tracks",track);
+  document.getElementById("saveDlg").close();
+  app.currentTrackId=track.id;cancelSetup();refreshTrackSel();recomputeCrossings();renderAll();
+  toast(editing?("Updated track: "+name):("Saved track: "+name));
+};
+document.getElementById("saveCancel").onclick=()=>document.getElementById("saveDlg").close();
+document.getElementById("cancelSetupBtn").onclick=cancelSetup;
+document.getElementById("newTrackBtn").onclick=beginSetup;
+document.getElementById("editTrackBtn").onclick=beginEdit;
+document.getElementById("fitViewBtn").onclick=()=>{resetMapView();drawMap();};
+
+document.getElementById("trackSel").onchange=e=>{app.currentTrackId=e.target.value;
+  document.getElementById("delTrackBtn").classList.toggle("hidden",!app.currentTrackId);
+  document.getElementById("editTrackBtn").classList.toggle("hidden",!app.currentTrackId);
+  resetMapView();recomputeCrossings();renderAll();};
+document.getElementById("delTrackBtn").onclick=async()=>{
+  const t=currentTrack();if(!t)return;if(!confirm("Delete track “"+t.name+"”?"))return;
+  await DB.del("tracks",t.id);app.tracks=app.tracks.filter(x=>x.id!==t.id);app.currentTrackId="";
+  refreshTrackSel();recomputeCrossings();renderAll();};
+
+async function removeRun(runId){
+  const run=app.runs.find(r=>r.id===runId); if(!run)return;
+  if(!confirm("Remove “"+runName(run)+"”? (re-import the file to add it back)"))return;
+  app.runs=app.runs.filter(r=>r.id!==runId);
+  delete app.crossings[runId]; delete _distTimeCache[runId];
+  if(app.refRunId===runId) app.refRunId=app.runs.length?app.runs[0].id:"";
+  try{await DB.del("runs",runId);}catch(e){}
+  resetMapView(); refreshRefSel(); renderAll();
+  toast("Removed "+runName(run));
+}
+document.getElementById("view-splits").addEventListener("click",e=>{
+  const b=e.target.closest(".run-remove"); if(b) removeRun(b.dataset.run);
+});
+document.getElementById("view-splits").addEventListener("change",e=>{
+  const col=e.target.closest(".run-color");
+  if(col){const run=app.runs.find(r=>r.id===col.dataset.run);
+    if(run){run.color=col.value;DB.put("runs",run).catch(()=>{});renderAll();}return;}
+  const en=e.target.closest(".run-enable");
+  if(en){const run=app.runs.find(r=>r.id===en.dataset.run);
+    if(run){run.enabled=en.checked;
+      if(!en.checked&&app.refRunId===run.id){const first=displayRuns()[0];app.refRunId=first?first.id:"";}
+      DB.put("runs",run).catch(()=>{});refreshRefSel();renderAll();}}
+});
+document.getElementById("importBtn").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange=e=>{importFiles([...e.target.files]);e.target.value="";};
+// drag & drop
+document.body.addEventListener("dragover",e=>{e.preventDefault();});
+document.body.addEventListener("drop",e=>{e.preventDefault();const f=[...e.dataTransfer.files].filter(x=>/\.json$/i.test(x.name));if(f.length)importFiles(f);});
+
+document.getElementById("refSel").onchange=e=>{app.refRunId=e.target.value;renderAll();};
+document.getElementById("channelSel").onchange=e=>{app.channel=e.target.value;drawMap();};
+document.getElementById("unitSel").onchange=e=>{app.units=e.target.value;renderAll();};
+
+document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  app.activeView=b.dataset.view;[...e.currentTarget.children].forEach(c=>c.classList.toggle("active",c===b));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+app.activeView));
+  renderActive();});
+
+// settings
+function renderRidingStates(){
+  const box=document.getElementById("ridingStates");box.innerHTML="";
+  Object.keys(STATE_LABELS).forEach(k=>{const s=+k;
+    const lab=document.createElement("label");
+    lab.innerHTML=`<input type="checkbox" ${app.ridingSet.has(s)?"checked":""} value="${s}"> ${s}·${STATE_LABELS[s]}`;
+    lab.querySelector("input").onchange=e=>{if(e.target.checked)app.ridingSet.add(s);else app.ridingSet.delete(s);};
+    box.appendChild(lab);});
+}
+function renderCompareChannels(){
+  const box=document.getElementById("compareChannels");box.innerHTML="";
+  CHANNEL_ORDER.forEach(id=>{const ch=CHANNEL_CATALOG[id];
+    const lab=document.createElement("label");
+    lab.innerHTML=`<input type="checkbox" ${app.channels.includes(id)?"checked":""} value="${id}"> ${ch.label}`;
+    lab.querySelector("input").onchange=e=>{
+      if(e.target.checked){if(!app.channels.includes(id))app.channels.push(id);}
+      else app.channels=app.channels.filter(x=>x!==id);
+    };
+    box.appendChild(lab);});
+}
+document.getElementById("settingsBtn").onclick=()=>{renderRidingStates();renderCompareChannels();
+  document.getElementById("gateWidthInp").value=app.gateWidth;
+  document.getElementById("fallSpdInp").value=app.fallMinSpd;
+  document.getElementById("tempUnitSel").value=app.tempUnit;
+  document.getElementById("settingsDlg").showModal();};
+document.getElementById("settingsClose").onclick=()=>{
+  app.gateWidth=+document.getElementById("gateWidthInp").value||25;
+  app.fallMinSpd=+document.getElementById("fallSpdInp").value||0;
+  app.tempUnit=document.getElementById("tempUnitSel").value;
+  app.channels=CHANNEL_ORDER.filter(id=>app.channels.includes(id)); // keep catalog order
+  document.getElementById("settingsDlg").close();
+  saveSettings();recomputeCrossings();renderAll();};
+function saveSettings(){try{localStorage.setItem("splits.settings",JSON.stringify({
+  riding:[...app.ridingSet],gateWidth:app.gateWidth,fallMinSpd:app.fallMinSpd,units:app.units,tempUnit:app.tempUnit,channels:app.channels}));}catch(e){}}
+function loadSettings(){try{const s=JSON.parse(localStorage.getItem("splits.settings")||"{}");
+  if(s.riding)app.ridingSet=new Set(s.riding);if(s.gateWidth)app.gateWidth=s.gateWidth;
+  if(s.fallMinSpd!=null)app.fallMinSpd=s.fallMinSpd;if(s.units){app.units=s.units;document.getElementById("unitSel").value=s.units;}
+  if(s.tempUnit)app.tempUnit=s.tempUnit;
+  if(Array.isArray(s.channels)&&s.channels.length)app.channels=s.channels.filter(id=>CHANNEL_CATALOG[id]);}catch(e){}}
+
+// redraw on resize
+let rT=null;new ResizeObserver(()=>{clearTimeout(rT);rT=setTimeout(()=>{drawMap();renderActive();},80);}).observe(document.getElementById("mapWrap"));
+window.addEventListener("resize",()=>{clearTimeout(rT);rT=setTimeout(renderActive,120);});
+
+/* ---------- boot ---------------------------------------------------------- */
+(async function init(){
+  loadSettings();
+  try{
+    await DB.open();
+    app.tracks=await DB.all("tracks");
+    const runs=await DB.all("runs");
+    app.runs=runs; if(runs.length)app.refRunId=runs[0].id;
+  }catch(e){console.error(e);toast("Storage unavailable — running in-memory only.");}
+  refreshTrackSel();refreshRefSel();
+  if(app.currentTrackId||app.tracks.length){/* leave none selected by default */}
+  renderAll();
+})();
+</script>
+</body>
+</html>
