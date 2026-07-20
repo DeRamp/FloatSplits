@@ -1,0 +1,4 @@
+# Ride logs — keep local, don't track in git
+Logs/
+*.json
+!package.json
