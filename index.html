@@ -82,7 +82,7 @@
   .run-row{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px 8px}
   .run-row.off{opacity:.5}
   .run-row input[type=color]{width:22px;height:22px;padding:0;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer}
-  .run-row .run-nm{font-size:13px}
+  .run-row .run-name{font-size:13px;width:120px;padding:3px 6px}
   .run-row .run-remove{padding:2px 7px;line-height:1}
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
   .card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
@@ -145,9 +145,7 @@
         <option value="delta">Δ time vs ref</option>
       </select>
     </label>
-    <label class="field">Units
-      <select id="unitSel"><option value="kmh">km/h</option><option value="mph">mph</option></select>
-    </label>
+    <label class="field" title="Show off / fall pins on the map"><input type="checkbox" id="offsToggle" checked> Offs</label>
     <button id="settingsBtn" title="Settings">⚙</button>
   </div>
 </header>
@@ -176,7 +174,6 @@
       <button data-view="splits" class="active">Splits &amp; summary</button>
       <button data-view="delta">Δ time</button>
       <button data-view="channels">Channels</button>
-      <button data-view="dist">Distributions</button>
       <button data-view="power">Battery &amp; thermal</button>
       <button data-view="falls">Offs</button>
     </div>
@@ -184,7 +181,6 @@
       <div class="view active" id="view-splits"></div>
       <div class="view" id="view-delta"></div>
       <div class="view" id="view-channels"></div>
-      <div class="view" id="view-dist"></div>
       <div class="view" id="view-power"></div>
       <div class="view" id="view-falls"></div>
     </div>
@@ -205,10 +201,9 @@
       <div style="margin-bottom:6px">Stats to compare <span class="tag">(shown as graphs in the Channels tab)</span></div>
       <div class="statebox" id="compareChannels"></div>
     </div>
-    <div>
-      <div style="margin-bottom:6px">Riding states <span class="tag">(an off = leaving this set; recovery = time until it returns)</span></div>
-      <div class="statebox" id="ridingStates"></div>
-    </div>
+    <label class="field">Speed unit
+      <select id="unitSel"><option value="kmh">km/h</option><option value="mph">mph</option></select>
+    </label>
     <label class="field">Temperature unit
       <select id="tempUnitSel"><option value="c">Celsius (°C)</option><option value="f">Fahrenheit (°F)</option></select>
     </label>
@@ -386,9 +381,6 @@ function segmentMetrics(run,tIn,tOut,ridingSet,minSpd){
   const s=telWindow(run,tIn,tOut); if(!s.length) return null;
   const falls=findFalls(s,ridingSet,minSpd);
   const gpsIn=gpsDistAtTime(run,tIn), gpsOut=gpsDistAtTime(run,tOut);
-  // elevation gain/loss from gps in window
-  let gain=0,loss=0,prevAlt=null;
-  for(const p of run.gps){ if(p.t<tIn||p.t>tOut) continue; if(prevAlt!=null){const d=p.alt-prevAlt; if(d>0)gain+=d; else loss-=d;} prevAlt=p.alt; }
   return {
     dur:tOut-tIn, distM:gpsOut-gpsIn,
     duty:stat(s.map(x=>x.duty)), spd:stat(s.map(x=>x.spd)),
@@ -396,7 +388,6 @@ function segmentMetrics(run,tIn,tOut,ridingSet,minSpd){
     volts:stat(s.map(x=>x.volts)),
     battPctStart:s[0].battPct, battPctEnd:s[s.length-1].battPct,
     whStart:s[0].wh, whEnd:s[s.length-1].wh,
-    elevGain:gain, elevLoss:loss,
     falls, fallCount:falls.length, totalDowntimeMs:falls.reduce((a,f)=>a+(f.recoveryMs||0),0),
     nSamples:s.length
   };
@@ -431,7 +422,8 @@ const app={
   channels:["gpsSpd","spd","duty","motorTemp","pitch"], // stats shown in the Channels comparison tab
   units:"kmh",
   tempUnit:"c",            // "c" | "f" — display unit for temperatures
-  ridingSet:new Set([1,3]),
+  showOffs:true,           // show off/fall pins on the map
+  ridingSet:new Set([1,2,3]),  // fixed: riding = running / tiltback / wheelslip
   gateWidth:25,
   fallMinSpd:0,
   setup:null,              // {refRunId, gates:[]} while creating a track
@@ -569,8 +561,8 @@ function drawMap(){
   // gates (from setup or current track)
   const gates=app.setup?app.setup.gates:(currentTrack()?currentTrack().gates:[]);
   gates.forEach((g,i)=>drawGate(ctx,tf,g,i,gates.length));
-  // fall pins (same set as the Falls tab), colored per run
-  if(!app.setup){
+  // off/fall pins (same set as the Offs tab), colored per run
+  if(!app.setup && app.showOffs){
     for(const run of runs){
       for(const f of runFalls(run)){
         const pos=gpsPosAtTime(run,f.t); if(!pos)continue;
@@ -646,7 +638,7 @@ function sampleGpsAt(run,t,key){
 }
 // Catalog of comparable channels. GPS speed comes from the GPS track (m/s → display units); the rest from board telemetry.
 const CHANNEL_CATALOG={
-  gpsSpd:{label:"GPS speed",source:"gps",key:"spd",unit:()=>spdUnit(),conv:v=>convSpd(v*3.6),dec:1},
+  gpsSpd:{label:"GPS speed",source:"gps",key:"spd",unit:()=>spdUnit(),conv:v=>convSpd(v),dec:1},
   spd:{label:"Board speed",source:"tel",key:"spd",unit:()=>spdUnit(),conv:v=>convSpd(v),dec:1},
   duty:{label:"Duty cycle",source:"tel",key:"duty",unit:()=>"%",conv:v=>v*100,dec:0},
   motorTemp:{label:"Motor temp",source:"tel",key:"motorTemp",unit:()=>tempUnit(),conv:v=>convTemp(v),dec:0},
@@ -657,7 +649,6 @@ const CHANNEL_CATALOG={
   pitch:{label:"Pitch angle",source:"tel",key:"pitch",unit:()=>"°",conv:v=>v,dec:1},
   roll:{label:"Roll angle",source:"tel",key:"roll",unit:()=>"°",conv:v=>v,dec:1},
   throttle:{label:"Throttle",source:"tel",key:"throttle",unit:()=>"",conv:v=>v,dec:0},
-  altitude:{label:"Altitude",source:"gps",key:"alt",unit:()=>"m",conv:v=>v,dec:0},
 };
 // avg/min/max of a catalog channel over a time window (display units); works for GPS- and telemetry-sourced channels.
 function channelStat(run,tIn,tOut,id){
@@ -672,7 +663,7 @@ function channelStat(run,tIn,tOut,id){
 }
 function fmtChan(id,v){return v==null||!isFinite(v)?"—":v.toFixed(CHANNEL_CATALOG[id].dec||0);}
 function selectedChannels(){return app.channels.filter(id=>CHANNEL_CATALOG[id]);}
-const CHANNEL_ORDER=["gpsSpd","spd","duty","motorTemp","ctrlTemp","volts","battPct","motorCurrent","pitch","roll","throttle","altitude"];
+const CHANNEL_ORDER=["gpsSpd","spd","duty","motorTemp","ctrlTemp","volts","battPct","motorCurrent","pitch","roll","throttle"];
 function sampleChannel(run,t,id){const ch=CHANNEL_CATALOG[id];if(!ch)return null;
   const raw=ch.source==="gps"?sampleGpsAt(run,t,ch.key):sampleTelAt(run,t,ch.key);
   return raw==null?null:ch.conv(raw);}
@@ -774,7 +765,7 @@ function runsManagerHTML(all){
     h+=`<div class="run-row${on?'':' off'}" title="${on?'Enabled':'Disabled'} — toggle to include in comparisons">
       <input type="color" class="run-color" data-run="${r.id}" value="${colorFor(r.id)}" title="Run color">
       <input type="checkbox" class="run-enable" data-run="${r.id}" ${on?'checked':''} title="Enable / disable">
-      <span class="run-nm">${runName(r)}</span>
+      <input type="text" class="run-name" data-run="${r.id}" value="${runName(r).replace(/"/g,'&quot;')}" title="Rename this run">
       <button class="run-remove danger" data-run="${r.id}" title="Remove this run">✕</button>
     </div>`;}
   return h+'</div>';
@@ -848,7 +839,7 @@ function renderSplits(){
       (winner?`<span class="win">fastest: ${runName(winner)} · ${fmtTime(best)}</span>`:'')+`</div>`;
     html+='<div style="overflow:auto"><table><thead><tr><th class="rank">#</th><th>Run</th><th>Split</th><th>Δ best</th>'+
       chans.map(id=>`<th>${CHANNEL_CATALOG[id].label} max${CHANNEL_CATALOG[id].unit()?' ('+CHANNEL_CATALOG[id].unit()+')':''}</th>`).join('')+
-      `<th>Elev +/−</th><th>Offs</th><th>Recovery</th></tr></thead><tbody>`;
+      `<th>Offs</th><th>Recovery</th></tr></thead><tbody>`;
     ordered.forEach((e,rank)=>{const m=e.m;const isBest=e.split!=null&&e.split===best;
       const rc=app.crossings[e.run.id];
       html+=`<tr><td class="rank">${e.split==null?'–':rank+1}</td>
@@ -856,8 +847,7 @@ function renderSplits(){
         <td class="${e.split==null?'na':(isBest?'best':'')}">${e.split==null?'N/A':fmtTime(e.split)}</td>
         <td class="delta">${e.split==null?'—':(isBest?'—':'+'+fmtTime(e.split-best))}</td>`+
         chans.map(id=>`<td>${fmtChan(id,channelStat(e.run,rc[i].t,rc[i+1].t,id).max)}</td>`).join('')+
-        `<td>+${m.elevGain.toFixed(0)}/−${m.elevLoss.toFixed(0)}m</td>
-        <td>${m.fallCount}</td><td>${fmtDur(m.totalDowntimeMs)}</td></tr>`;
+        `<td>${m.fallCount}</td><td>${fmtDur(m.totalDowntimeMs)}</td></tr>`;
     });
     html+='</tbody></table></div></div>';
   }
@@ -943,36 +933,6 @@ function drawCursorLine(ctx,map,w,h,L){
   ctx.beginPath();ctx.moveTo(x,CH.m.t);ctx.lineTo(x,h-CH.m.b);ctx.stroke();ctx.setLineDash([]);
 }
 
-function renderDist(){
-  const el=document.getElementById("view-dist");
-  const runs=displayRuns();if(!runs.length){el.innerHTML='<div class="empty">Import runs first.</div>';return;}
-  el.innerHTML=`${legendHTML(runs)}
-    <div class="chart-block"><h3>Duty-cycle exposure</h3><p class="sub">% of riding time spent in each duty band. Sustained time above ~80% risks pushback / nosedive.</p><canvas class="chart" id="dutyHist"></canvas></div>
-    <div class="chart-block"><h3>Speed distribution</h3><p class="sub">% of riding time in each speed band (${spdUnit()}).</p><canvas class="chart" id="spdHist"></canvas></div>`;
-  drawHist("dutyHist",runs,s=>s.duty*100,[0,100],10,"Duty %","% of time",v=>v.toFixed(0));
-  const maxSpd=Math.max(...runs.flatMap(r=>r.tel.map(s=>convSpd(s.spd))));
-  drawHist("spdHist",runs,s=>convSpd(s.spd),[0,Math.ceil(maxSpd/10)*10],Math.max(8,Math.ceil(maxSpd/10)),spdUnit(),"% of time",v=>v.toFixed(0));
-}
-function drawHist(id,runs,accessor,range,nbins,xlab,ylab,fmtX){
-  const cv=document.getElementById(id);
-  const draw=()=>{
-    const {ctx,w,h}=setupCanvas(cv,220);
-    const bw=(range[1]-range[0])/nbins;
-    const dataset=runs.map(run=>{const bins=new Array(nbins).fill(0);let n=0;
-      for(const s of run.tel){if(!app.ridingSet.has(s.state))continue;const v=accessor(s);if(v<range[0]||v>range[1])continue;
-        let bi=Math.min(nbins-1,Math.floor((v-range[0])/bw));bins[bi]++;n++;}
-      return {run,bins:bins.map(b=>n?b/n*100:0)};});
-    let ymx=Math.max(1,...dataset.flatMap(d=>d.bins));
-    const map=axes(ctx,w,h,[range[0],range[1]],[0,ymx*1.08],xlab,ylab,fmtX,v=>v.toFixed(0));
-    const groupW=(map.px(range[0]+bw)-map.px(range[0]));
-    const barW=groupW/(runs.length+0.5);
-    dataset.forEach((d,ri)=>{ctx.fillStyle=colorFor(d.run.id);
-      d.bins.forEach((val,bi)=>{const x0=map.px(range[0]+bi*bw)+ri*barW+2;const y=map.py(val);
-        const bh=map.py(0)-y;if(bh>0){ctx.fillRect(x0,y,Math.max(1,barW-1.5),bh);}});});
-  };
-  cv._draw=draw;draw();
-}
-
 function renderPower(){
   const el=document.getElementById("view-power");
   const runs=displayRuns();if(!runs.length){el.innerHTML='<div class="empty">Import runs first.</div>';return;}
@@ -1025,7 +985,7 @@ function renderFalls(){
 }
 
 function renderActive(){
-  const map={splits:renderSplits,delta:renderDelta,channels:renderChannels,dist:renderDist,power:renderPower,falls:renderFalls};
+  const map={splits:renderSplits,delta:renderDelta,channels:renderChannels,power:renderPower,falls:renderFalls};
   _cursorCanvases=[];
   (map[app.activeView]||renderSplits)();
 }
@@ -1256,6 +1216,9 @@ document.getElementById("view-splits").addEventListener("change",e=>{
   const col=e.target.closest(".run-color");
   if(col){const run=app.runs.find(r=>r.id===col.dataset.run);
     if(run){run.color=col.value;DB.put("runs",run).catch(()=>{});renderAll();}return;}
+  const nm=e.target.closest(".run-name");
+  if(nm){const run=app.runs.find(r=>r.id===nm.dataset.run);
+    if(run){run.name=nm.value.trim()||run.name;DB.put("runs",run).catch(()=>{});refreshRefSel();renderAll();}return;}
   const en=e.target.closest(".run-enable");
   if(en){const run=app.runs.find(r=>r.id===en.dataset.run);
     if(run){run.enabled=en.checked;
@@ -1270,7 +1233,7 @@ document.body.addEventListener("drop",e=>{e.preventDefault();const f=[...e.dataT
 
 document.getElementById("refSel").onchange=e=>{app.refRunId=e.target.value;renderAll();};
 document.getElementById("channelSel").onchange=e=>{app.channel=e.target.value;drawMap();};
-document.getElementById("unitSel").onchange=e=>{app.units=e.target.value;renderAll();};
+document.getElementById("offsToggle").onchange=e=>{app.showOffs=e.target.checked;saveSettings();drawMap();};
 
 document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   app.activeView=b.dataset.view;[...e.currentTarget.children].forEach(c=>c.classList.toggle("active",c===b));
@@ -1278,14 +1241,6 @@ document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.cl
   renderActive();});
 
 // settings
-function renderRidingStates(){
-  const box=document.getElementById("ridingStates");box.innerHTML="";
-  Object.keys(STATE_LABELS).forEach(k=>{const s=+k;
-    const lab=document.createElement("label");
-    lab.innerHTML=`<input type="checkbox" ${app.ridingSet.has(s)?"checked":""} value="${s}"> ${s}·${STATE_LABELS[s]}`;
-    lab.querySelector("input").onchange=e=>{if(e.target.checked)app.ridingSet.add(s);else app.ridingSet.delete(s);};
-    box.appendChild(lab);});
-}
 function renderCompareChannels(){
   const box=document.getElementById("compareChannels");box.innerHTML="";
   CHANNEL_ORDER.forEach(id=>{const ch=CHANNEL_CATALOG[id];
@@ -1297,24 +1252,27 @@ function renderCompareChannels(){
     };
     box.appendChild(lab);});
 }
-document.getElementById("settingsBtn").onclick=()=>{renderRidingStates();renderCompareChannels();
+document.getElementById("settingsBtn").onclick=()=>{renderCompareChannels();
   document.getElementById("gateWidthInp").value=app.gateWidth;
   document.getElementById("fallSpdInp").value=app.fallMinSpd;
+  document.getElementById("unitSel").value=app.units;
   document.getElementById("tempUnitSel").value=app.tempUnit;
   document.getElementById("settingsDlg").showModal();};
 document.getElementById("settingsClose").onclick=()=>{
   app.gateWidth=+document.getElementById("gateWidthInp").value||25;
   app.fallMinSpd=+document.getElementById("fallSpdInp").value||0;
+  app.units=document.getElementById("unitSel").value;
   app.tempUnit=document.getElementById("tempUnitSel").value;
   app.channels=CHANNEL_ORDER.filter(id=>app.channels.includes(id)); // keep catalog order
   document.getElementById("settingsDlg").close();
   saveSettings();recomputeCrossings();renderAll();};
 function saveSettings(){try{localStorage.setItem("splits.settings",JSON.stringify({
-  riding:[...app.ridingSet],gateWidth:app.gateWidth,fallMinSpd:app.fallMinSpd,units:app.units,tempUnit:app.tempUnit,channels:app.channels}));}catch(e){}}
+  gateWidth:app.gateWidth,fallMinSpd:app.fallMinSpd,units:app.units,tempUnit:app.tempUnit,showOffs:app.showOffs,channels:app.channels}));}catch(e){}}
 function loadSettings(){try{const s=JSON.parse(localStorage.getItem("splits.settings")||"{}");
-  if(s.riding)app.ridingSet=new Set(s.riding);if(s.gateWidth)app.gateWidth=s.gateWidth;
+  if(s.gateWidth)app.gateWidth=s.gateWidth;
   if(s.fallMinSpd!=null)app.fallMinSpd=s.fallMinSpd;if(s.units){app.units=s.units;document.getElementById("unitSel").value=s.units;}
   if(s.tempUnit)app.tempUnit=s.tempUnit;
+  if(s.showOffs!=null){app.showOffs=s.showOffs;document.getElementById("offsToggle").checked=s.showOffs;}
   if(Array.isArray(s.channels)&&s.channels.length)app.channels=s.channels.filter(id=>CHANNEL_CATALOG[id]);}catch(e){}}
 
 // redraw on resize
